@@ -1,0 +1,80 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="outerShadowJar" x="-20%" y="-20%" width="140%" height="150%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#000000" flood-opacity="0.45" />
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#059669" flood-opacity="0.35" />
+    </filter>
+
+    <linearGradient id="jarSquircleGrad" x1="28" y1="20" x2="228" y2="236" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="35%" stop-color="#059669" />
+      <stop offset="75%" stop-color="#047857" />
+      <stop offset="100%" stop-color="#064e3b" />
+    </linearGradient>
+
+    <linearGradient id="jarBevelStroke" x1="128" y1="20" x2="128" y2="236" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9" />
+      <stop offset="40%" stop-color="#ffffff" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#ecfdf5" stop-opacity="0.05" />
+    </linearGradient>
+
+    <!-- Glass Jar Body -->
+    <linearGradient id="glassJarGrad" x1="70" y1="90" x2="186" y2="195" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.5" />
+      <stop offset="25%" stop-color="#d1fae5" stop-opacity="0.2" />
+      <stop offset="70%" stop-color="#a7f3d0" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.4" />
+    </linearGradient>
+
+    <!-- Golden Coin Gradient -->
+    <linearGradient id="goldCoinGrad" x1="128" y1="130" x2="128" y2="185" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+
+    <!-- Cork/Wooden Lid Gradient -->
+    <linearGradient id="lidGrad" x1="128" y1="65" x2="128" y2="92" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fed7aa" />
+      <stop offset="60%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#78350f" />
+    </linearGradient>
+  </defs>
+
+  <!-- 3D Squircle Base -->
+  <rect x="28" y="24" width="200" height="200" rx="52" fill="url(#jarSquircleGrad)" filter="url(#outerShadowJar)" />
+  <rect x="29" y="25" width="198" height="198" rx="51" stroke="url(#jarBevelStroke)" stroke-width="2.5" fill="none" />
+  
+  <!-- Glass Top Shimmer -->
+  <path d="M 32 76 C 32 46, 54 28, 84 26 L 172 26 C 202 28, 224 46, 224 76 C 180 88, 76 88, 32 76 Z" fill="white" opacity="0.35" />
+
+  <!-- Jar Drop Shadow -->
+  <ellipse cx="128" cy="202" rx="55" ry="12" fill="#000000" opacity="0.35" />
+
+  <!-- Glass Jar Base Outline & Fill -->
+  <path d="M 92 92 C 86 92, 70 106, 68 126 L 68 175 C 68 192, 84 198, 128 198 C 172 198, 188 192, 188 175 L 188 126 C 186 106, 170 92, 164 92 Z" fill="url(#glassJarGrad)" stroke="#ffffff" stroke-width="3.5" stroke-opacity="0.8" />
+
+  <!-- Coins Inside Jar -->
+  <!-- Coin 1 (Bottom Left) -->
+  <ellipse cx="106" cy="172" rx="20" ry="11" transform="rotate(-15 106 172)" fill="url(#goldCoinGrad)" stroke="#fef08a" stroke-width="2" />
+  <!-- Coin 2 (Bottom Right) -->
+  <ellipse cx="148" cy="174" rx="20" ry="11" transform="rotate(15 148 174)" fill="url(#goldCoinGrad)" stroke="#fef08a" stroke-width="2" />
+  <!-- Coin 3 (Middle Center Stacked) -->
+  <ellipse cx="128" cy="154" rx="22" ry="12" fill="url(#goldCoinGrad)" stroke="#fef08a" stroke-width="2.5" />
+  <!-- Golden Cross Emboss on Top Coin -->
+  <rect x="126" y="146" width="4" height="16" rx="1.5" fill="#fef08a" />
+  <rect x="120" y="151" width="16" height="4" rx="1.5" fill="#fef08a" />
+
+  <!-- Dropping Coin (Top Slot) -->
+  <ellipse cx="128" cy="115" rx="16" ry="9" fill="url(#goldCoinGrad)" stroke="#ffffff" stroke-width="2" filter="drop-shadow(0 4px 6px rgba(0,0,0,0.3))" />
+
+  <!-- Cork Lid Neck -->
+  <rect x="94" y="80" width="68" height="14" rx="4" fill="url(#lidGrad)" stroke="#ffffff" stroke-width="1.5" />
+  <!-- Cork Lid Top -->
+  <ellipse cx="128" cy="80" rx="36" ry="10" fill="url(#lidGrad)" stroke="#ffffff" stroke-width="1.5" />
+  <ellipse cx="128" cy="78" rx="28" ry="6" fill="#fed7aa" opacity="0.6" />
+
+  <!-- Glass Specular Vertical Highlight Curve -->
+  <path d="M 80 120 C 78 140, 78 165, 82 182" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="0.75" />
+  <path d="M 172 135 C 174 150, 174 168, 170 178" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.4" />
+</svg>

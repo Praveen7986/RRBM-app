@@ -1,0 +1,16 @@
+{
+  "latestVersionName": "1.1.0",
+  "latestVersionCode": 2,
+  "minimumSupportedVersionCode": 1,
+  "apkUrl": "/rrbm-app/releases/RRBM-1.1.0.apk",
+  "apkSize": 63,
+  "sha256": "c2947a531f91bf5528eb3a7909b700028f99ccb8d153748647567d3cecbbd933",
+  "releaseDate": "2026-10-06",
+  "releaseNotes": [
+    "Improved One-Tap Volunteer Alert system with multi-pulse vibration",
+    "Enhanced realtime live chat synchronization with instant emergency banner",
+    "Added full Telugu lyrics transliteration and interactive zoom controls",
+    "Optimized performance and offline battery efficiency for Android devices"
+  ],
+  "forceUpdate": false
+}

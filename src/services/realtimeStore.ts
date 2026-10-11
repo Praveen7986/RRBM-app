@@ -1,0 +1,679 @@
+// src/services/realtimeStore.ts
+// Production Realtime Store with Firebase Cloud Firestore (Internet-Wide) & Node.js/WebSocket LAN Fallback
+
+import { Volunteer, AlertEvent, ChatMessage, OfferingBalance, ConnectionStatus } from '../types/volunteer';
+import { triggerAlertSoundAndVibration, triggerChatNotification } from './audioNotification';
+import { apiClient, getServerBaseUrl, setCustomServerUrl } from './api';
+import { firebaseRealtime } from './firebaseRealtimeService';
+import { isFirebaseConfigured } from '../config/firebase';
+
+const STORAGE_KEYS = {
+  CURRENT_VOLUNTEER: 'rrbm_volunteer_user_2026',
+  CHAT_MESSAGES: 'rrbm_live_chat_messages_2026',
+  ACTIVE_ALERT: 'rrbm_active_alert_2026',
+  OFFERING_BALANCE: 'rrbm_festival_balance_2026'
+};
+
+const BROADCAST_CHANNEL_NAME = 'rrbm_alert_realtime_channel_2026';
+
+const INITIAL_CHAT: ChatMessage[] = [
+  {
+    id: 'MSG_INIT_1',
+    volunteerId: 'OFFICE',
+    senderName: 'Pastor Office',
+    text: 'Welcome to RRBM 3-Day Fasting Prayers 2026! Morning altar prayer begins at 09:00 AM.',
+    time: '09:00 AM',
+    type: 'chat'
+  },
+  {
+    id: 'MSG_INIT_2',
+    volunteerId: 'LEAD',
+    senderName: 'Worship Leader',
+    text: 'Worship team sound check complete. All volunteers please take your respective stations.',
+    time: '09:05 AM',
+    type: 'chat'
+  }
+];
+
+class RealtimeStoreService {
+  private ws: WebSocket | null = null;
+  private broadcastChannel: BroadcastChannel | null = null;
+  private listeners: Set<() => void> = new Set();
+  
+  private currentVolunteer: Volunteer | null = null;
+  private activeAlert: AlertEvent | null = null;
+  private chatMessages: ChatMessage[] = [];
+  private offeringBalance: OfferingBalance = {
+    amount: 148500,
+    updatedBy: 'Festival Coordination Desk',
+    updatedAt: new Date().toISOString()
+  };
+  private connectionStatus: ConnectionStatus = 'connecting';
+  private reconnectTimer: any = null;
+  private heartbeatTimer: any = null;
+  private isProcessingAlert: boolean = false;
+  private reconnectAttempts: number = 0;
+  private isCloudFirebaseMode: boolean = false;
+
+  constructor() {
+    this.loadInitialStorage();
+    this.initBroadcastChannel();
+    this.initLifecycleListeners();
+
+    if (isFirebaseConfigured()) {
+      this.initFirebaseRealtime();
+    } else {
+      this.connectWebSocket();
+      this.fetchInitialData();
+    }
+  }
+
+  private initFirebaseRealtime() {
+    try {
+      this.isCloudFirebaseMode = true;
+      this.connectionStatus = 'connected';
+      console.log('[RealtimeStore] Operating in Cloud Firebase Mode (Internet-wide sync)');
+
+      // Listen to Firebase Auth state to attach/detach protected Firestore listeners
+      firebaseRealtime.initAuthListener((authenticatedVolunteer) => {
+        if (authenticatedVolunteer) {
+          this.currentVolunteer = authenticatedVolunteer;
+          localStorage.setItem(STORAGE_KEYS.CURRENT_VOLUNTEER, JSON.stringify(authenticatedVolunteer));
+          this.attachFirestoreListeners();
+        } else {
+          this.currentVolunteer = null;
+          localStorage.removeItem(STORAGE_KEYS.CURRENT_VOLUNTEER);
+          firebaseRealtime.cleanup();
+        }
+        this.notify();
+      });
+
+      if (this.currentVolunteer) {
+        this.attachFirestoreListeners();
+      }
+
+      this.notify();
+    } catch (err) {
+      console.warn('[RealtimeStore] Failed to initialize Firebase real-time listeners:', err);
+      this.isCloudFirebaseMode = false;
+      this.connectWebSocket();
+      this.fetchInitialData();
+    }
+  }
+
+  private attachFirestoreListeners() {
+    // 1. Subscribe to Cloud Firestore Alerts
+    firebaseRealtime.subscribeToAlerts((alert) => {
+      this.activeAlert = alert;
+      if (alert) {
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_ALERT, JSON.stringify(alert));
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.ACTIVE_ALERT);
+      }
+      this.notify();
+    });
+
+    // 2. Subscribe to Cloud Firestore Chat
+    firebaseRealtime.subscribeToChat(this.currentVolunteer?.id || null, (messages) => {
+      if (messages && messages.length > 0) {
+        this.chatMessages = messages;
+        localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify(messages));
+      }
+      this.notify();
+    });
+
+    // 3. Subscribe to Offering Balance
+    firebaseRealtime.subscribeToBalance((balance) => {
+      this.offeringBalance = balance;
+      localStorage.setItem(STORAGE_KEYS.OFFERING_BALANCE, JSON.stringify(balance));
+      this.notify();
+    });
+  }
+
+  private loadInitialStorage() {
+    if (typeof window === 'undefined') return;
+
+    // Load Volunteer
+    const savedVolunteer = localStorage.getItem(STORAGE_KEYS.CURRENT_VOLUNTEER);
+    if (savedVolunteer) {
+      try {
+        this.currentVolunteer = JSON.parse(savedVolunteer);
+      } catch {
+        this.currentVolunteer = null;
+      }
+    }
+
+    // Load Chat
+    const savedChat = localStorage.getItem(STORAGE_KEYS.CHAT_MESSAGES);
+    if (savedChat) {
+      try {
+        this.chatMessages = JSON.parse(savedChat);
+      } catch {
+        this.chatMessages = INITIAL_CHAT;
+      }
+    } else {
+      this.chatMessages = INITIAL_CHAT;
+    }
+
+    // Load Active Alert
+    const savedAlert = localStorage.getItem(STORAGE_KEYS.ACTIVE_ALERT);
+    if (savedAlert) {
+      try {
+        this.activeAlert = JSON.parse(savedAlert);
+      } catch {
+        this.activeAlert = null;
+      }
+    }
+
+    // Load Balance
+    const savedBalance = localStorage.getItem(STORAGE_KEYS.OFFERING_BALANCE);
+    if (savedBalance) {
+      try {
+        this.offeringBalance = JSON.parse(savedBalance);
+      } catch {
+        // use default
+      }
+    }
+  }
+
+  private initBroadcastChannel() {
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      this.broadcastChannel = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+      this.broadcastChannel.onmessage = (event) => {
+        const { type, payload } = event.data || {};
+        this.handleEvent(type, payload, false);
+      };
+    }
+  }
+
+  private initLifecycleListeners() {
+    if (typeof window === 'undefined') return;
+
+    window.addEventListener('online', () => {
+      console.log('[RealtimeStore] Device online event detected');
+      if (this.isCloudFirebaseMode) {
+        this.connectionStatus = 'connected';
+        this.notify();
+      } else {
+        this.reconnectWithServer();
+      }
+    });
+
+    window.addEventListener('focus', () => {
+      if (!this.isCloudFirebaseMode && this.connectionStatus !== 'connected') {
+        this.reconnectWithServer();
+      }
+    });
+  }
+
+  public getWebSocketUrl(): string {
+    const baseUrl = getServerBaseUrl();
+    try {
+      const parsed = new URL(baseUrl);
+      const wsProtocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${wsProtocol}//${parsed.host}/ws`;
+    } catch {
+      const envWs = import.meta.env.VITE_WS_URL;
+      if (envWs && envWs.trim()) return envWs.trim();
+      return 'ws://192.168.55.102:3000/ws';
+    }
+  }
+
+  public reconnectWithServer(newServerUrl?: string) {
+    if (newServerUrl !== undefined) {
+      setCustomServerUrl(newServerUrl);
+    }
+
+    if (isFirebaseConfigured()) {
+      firebaseRealtime.cleanup();
+      this.initFirebaseRealtime();
+      return;
+    }
+
+    this.isCloudFirebaseMode = false;
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch {}
+      this.ws = null;
+    }
+
+    this.stopHeartbeat();
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    this.reconnectAttempts = 0;
+    this.connectWebSocket();
+    this.fetchInitialData();
+  }
+
+  private connectWebSocket() {
+    if (typeof window === 'undefined') return;
+
+    try {
+      this.connectionStatus = 'connecting';
+      this.notify();
+
+      const wsUrl = this.getWebSocketUrl();
+      console.log(`[RealtimeStore] Connecting to WebSocket: ${wsUrl}`);
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.onopen = () => {
+        console.log(`[RealtimeStore] WebSocket connected successfully to ${wsUrl}`);
+        this.connectionStatus = 'connected';
+        this.reconnectAttempts = 0;
+        this.notify();
+        this.startHeartbeat();
+        this.fetchInitialData();
+      };
+
+      this.ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type) {
+            this.handleEvent(data.type, data.payload, true);
+          }
+        } catch (err) {
+          console.warn('[RealtimeStore] WS parse error:', err);
+        }
+      };
+
+      this.ws.onclose = () => {
+        this.connectionStatus = 'offline';
+        this.notify();
+        this.stopHeartbeat();
+        this.scheduleReconnect();
+      };
+
+      this.ws.onerror = (err) => {
+        console.warn('[RealtimeStore] WebSocket error:', err);
+        this.connectionStatus = 'offline';
+        this.notify();
+      };
+    } catch (e) {
+      console.warn('[RealtimeStore] WebSocket connection failed:', e);
+      this.connectionStatus = 'offline';
+      this.notify();
+      this.scheduleReconnect();
+    }
+  }
+
+  private startHeartbeat() {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'PING' }));
+      }
+    }, 15000);
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  private scheduleReconnect() {
+    if (this.reconnectTimer) return;
+    this.reconnectAttempts++;
+    const delay = Math.min(2000 + this.reconnectAttempts * 1000, 5000);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connectWebSocket();
+    }, delay);
+  }
+
+  public async fetchInitialData() {
+    if (this.isCloudFirebaseMode) return;
+
+    try {
+      const [alertRes, chatRes, balanceRes] = await Promise.allSettled([
+        apiClient.getActiveAlert(),
+        apiClient.getChatMessages(),
+        apiClient.getOfferingBalance()
+      ]);
+
+      if (alertRes.status === 'fulfilled' && alertRes.value.success) {
+        this.activeAlert = alertRes.value.activeAlert;
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_ALERT, JSON.stringify(this.activeAlert));
+      }
+
+      if (chatRes.status === 'fulfilled' && chatRes.value.success && chatRes.value.messages) {
+        this.chatMessages = chatRes.value.messages;
+        localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify(this.chatMessages));
+      }
+
+      if (balanceRes.status === 'fulfilled' && balanceRes.value.success && balanceRes.value.balance) {
+        this.offeringBalance = balanceRes.value.balance;
+        localStorage.setItem(STORAGE_KEYS.OFFERING_BALANCE, JSON.stringify(this.offeringBalance));
+      }
+
+      this.notify();
+    } catch {
+      // Offline fallback
+    }
+  }
+
+  private handleEvent(type: string, payload: any, shouldBroadcastLocal = true) {
+    if (!type) return;
+
+    if (type === 'INITIAL_SYNC') {
+      if (payload.activeAlert !== undefined) {
+        this.activeAlert = payload.activeAlert;
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_ALERT, JSON.stringify(this.activeAlert));
+      }
+      if (payload.chatMessages && Array.isArray(payload.chatMessages)) {
+        this.chatMessages = payload.chatMessages;
+        localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify(this.chatMessages));
+      }
+      if (payload.offeringBalance) {
+        this.offeringBalance = payload.offeringBalance;
+        localStorage.setItem(STORAGE_KEYS.OFFERING_BALANCE, JSON.stringify(this.offeringBalance));
+      }
+      this.notify();
+      return;
+    }
+
+    if (type === 'ALERT_CREATED') {
+      const { alert, chatMessage } = payload;
+      this.activeAlert = alert;
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_ALERT, JSON.stringify(alert));
+
+      if (chatMessage && !this.chatMessages.find(m => m.id === chatMessage.id)) {
+        this.chatMessages.push(chatMessage);
+        localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify(this.chatMessages));
+      }
+
+      triggerAlertSoundAndVibration(
+        '🚨 RRBM VOLUNTEER ALERT',
+        alert.message || 'Volunteers are requested to gather immediately. Tap to open live room.'
+      );
+
+      this.notify();
+    } else if (type === 'ALERT_RESOLVED') {
+      this.activeAlert = null;
+      localStorage.removeItem(STORAGE_KEYS.ACTIVE_ALERT);
+      this.notify();
+    } else if (type === 'CHAT_MESSAGE_CREATED') {
+      const newMsg = payload.message || payload;
+      if (newMsg && !this.chatMessages.find(m => m.id === newMsg.id)) {
+        this.chatMessages.push(newMsg);
+        localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify(this.chatMessages));
+        
+        if (!this.currentVolunteer || newMsg.volunteerId !== this.currentVolunteer.id) {
+          triggerChatNotification(newMsg.senderName, newMsg.text);
+        }
+
+        this.notify();
+      }
+    } else if (type === 'VOLUNTEER_RESPONSE_UPDATED') {
+      const { responses, chatMessage, alertId } = payload;
+      if (this.activeAlert && (this.activeAlert.id === alertId || alertId === 'current') && responses) {
+        this.activeAlert.responses = responses;
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_ALERT, JSON.stringify(this.activeAlert));
+      }
+      if (chatMessage && !this.chatMessages.find(m => m.id === chatMessage.id)) {
+        this.chatMessages.push(chatMessage);
+        localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify(this.chatMessages));
+      }
+      this.notify();
+    } else if (type === 'BALANCE_UPDATED') {
+      this.offeringBalance = payload;
+      localStorage.setItem(STORAGE_KEYS.OFFERING_BALANCE, JSON.stringify(payload));
+      this.notify();
+    }
+
+    if (shouldBroadcastLocal && this.broadcastChannel) {
+      try {
+        this.broadcastChannel.postMessage({ type, payload });
+      } catch {}
+    }
+  }
+
+  public subscribe(listener: () => void) {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notify() {
+    this.listeners.forEach(l => l());
+  }
+
+  // ==========================================
+  // PUBLIC ACTIONS
+  // ==========================================
+
+  // 1. Volunteer Sign-In with Volunteer ID & Password
+  public async signInVolunteer(volunteerId: string, password?: string): Promise<Volunteer> {
+    const trimmedId = volunteerId.trim();
+
+    // Cloud Mode via Firebase Authentication
+    if (this.isCloudFirebaseMode && password) {
+      const vol = await firebaseRealtime.signInVolunteer(trimmedId, password);
+      this.currentVolunteer = vol;
+      localStorage.setItem(STORAGE_KEYS.CURRENT_VOLUNTEER, JSON.stringify(vol));
+      this.notify();
+      return vol;
+    }
+
+    // Node Server Fallback
+    try {
+      const res = await apiClient.registerVolunteer(trimmedId);
+      if (res.success && res.volunteer) {
+        this.currentVolunteer = res.volunteer;
+        localStorage.setItem(STORAGE_KEYS.CURRENT_VOLUNTEER, JSON.stringify(res.volunteer));
+        this.notify();
+        return res.volunteer;
+      }
+    } catch (err: any) {
+      throw new Error(`Failed to sign in: ${err.message}. Check your credentials or internet connection.`);
+    }
+
+    throw new Error('Server returned invalid volunteer response.');
+  }
+
+  public async signOutVolunteer() {
+    if (this.isCloudFirebaseMode) {
+      try {
+        await firebaseRealtime.signOutVolunteer();
+      } catch {}
+    }
+    this.currentVolunteer = null;
+    localStorage.removeItem(STORAGE_KEYS.CURRENT_VOLUNTEER);
+    this.notify();
+  }
+
+  // 2. Trigger Immediate Alert Across All Devices (Cloud / Network)
+  public async triggerImmediateAlert(customMessage?: string): Promise<{ success: boolean; alert: AlertEvent }> {
+    if (this.isProcessingAlert) {
+      throw new Error('An alert is already being broadcast.');
+    }
+    this.isProcessingAlert = true;
+
+    const senderId = this.currentVolunteer ? this.currentVolunteer.id : '260';
+    const senderName = this.currentVolunteer ? this.currentVolunteer.name : 'Leader Desk';
+    const alertMsgText = customMessage || '🚨 PRAYER ALERT: Volunteers are requested to gather immediately!';
+
+    try {
+      // Cloud Firebase Dispatch
+      if (this.isCloudFirebaseMode) {
+        const alert = await firebaseRealtime.triggerAlert(senderId, senderName, alertMsgText);
+        this.activeAlert = alert;
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_ALERT, JSON.stringify(alert));
+        this.notify();
+        return { success: true, alert };
+      }
+
+      // Node Server Dispatch
+      const res = await apiClient.createAlert(senderId, senderName, alertMsgText);
+      if (res.success && res.alert) {
+        this.activeAlert = res.alert;
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_ALERT, JSON.stringify(res.alert));
+        if (res.chatMessage && !this.chatMessages.find(m => m.id === res.chatMessage.id)) {
+          this.chatMessages.push(res.chatMessage);
+          localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify(this.chatMessages));
+        }
+
+        triggerAlertSoundAndVibration('🚨 RRBM VOLUNTEER ALERT', alertMsgText);
+        this.notify();
+        return { success: true, alert: res.alert };
+      } else {
+        throw new Error('Server did not confirm alert broadcast.');
+      }
+    } catch (err: any) {
+      console.error('[RealtimeStore] Alert dispatch failed:', err.message);
+      throw new Error(err.message || 'Failed to dispatch alert across devices. Check internet connection.');
+    } finally {
+      setTimeout(() => {
+        this.isProcessingAlert = false;
+      }, 1000);
+    }
+  }
+
+  // 3. Quick Response Button Handler (I'M COMING / COMING LATE / CAN'T COME)
+  public async sendQuickResponse(responseType: 'coming' | 'coming_late' | 'not_coming'): Promise<void> {
+    if (!this.currentVolunteer) {
+      throw new Error('Please check in as a volunteer first.');
+    }
+
+    try {
+      if (this.isCloudFirebaseMode) {
+        await firebaseRealtime.sendQuickResponse(
+          this.currentVolunteer.id,
+          this.currentVolunteer.name,
+          responseType
+        );
+        return;
+      }
+
+      const alertId = this.activeAlert ? this.activeAlert.id : 'current';
+      const res = await apiClient.sendAlertResponse(
+        alertId,
+        this.currentVolunteer.id,
+        this.currentVolunteer.name,
+        responseType
+      );
+
+      if (res.success) {
+        if (this.activeAlert && res.responses) {
+          this.activeAlert.responses = res.responses;
+          localStorage.setItem(STORAGE_KEYS.ACTIVE_ALERT, JSON.stringify(this.activeAlert));
+        }
+        if (res.chatMessage && !this.chatMessages.find(m => m.id === res.chatMessage.id)) {
+          this.chatMessages.push(res.chatMessage);
+          localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify(this.chatMessages));
+        }
+        this.notify();
+      }
+    } catch (err: any) {
+      console.error('[RealtimeStore] Quick response failed:', err.message);
+      throw new Error(err.message || 'Failed to send response to other volunteers.');
+    }
+  }
+
+  // 4. Send Custom Live Chat Message
+  public async sendChatMessage(text: string): Promise<ChatMessage> {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      throw new Error('Message cannot be empty.');
+    }
+
+    const volunteerId = this.currentVolunteer ? this.currentVolunteer.id : '260';
+    const senderName = this.currentVolunteer ? this.currentVolunteer.name : 'Volunteer';
+
+    try {
+      if (this.isCloudFirebaseMode) {
+        return await firebaseRealtime.sendChatMessage(volunteerId, senderName, trimmed);
+      }
+
+      const res = await apiClient.sendChatMessage(volunteerId, senderName, trimmed);
+      if (res.success && res.message) {
+        if (!this.chatMessages.find(m => m.id === res.message.id)) {
+          this.chatMessages.push(res.message);
+          localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify(this.chatMessages));
+          this.notify();
+        }
+        return res.message;
+      }
+      throw new Error('Failed to send message: Server did not return message confirmation.');
+    } catch (err: any) {
+      console.error('[RealtimeStore] Live chat send failed:', err.message);
+      throw new Error(err.message || 'Could not send message. Please check connection.');
+    }
+  }
+
+  // 5. Update Offering Balance (Manager Desk)
+  public async updateOfferingBalance(amount: number, adminPin: string, updatedBy = 'Festival Manager'): Promise<boolean> {
+    try {
+      const res = await apiClient.updateOfferingBalance(amount, adminPin, updatedBy);
+      if (res.success && res.balance) {
+        this.offeringBalance = res.balance;
+        localStorage.setItem(STORAGE_KEYS.OFFERING_BALANCE, JSON.stringify(res.balance));
+        this.notify();
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      console.error('Balance update failed:', err.message);
+      throw err;
+    }
+  }
+
+  // 6. Resolve Active Alert
+  public async resolveAlert(alertId?: string): Promise<boolean> {
+    try {
+      if (this.isCloudFirebaseMode) {
+        await firebaseRealtime.resolveAlert();
+        this.activeAlert = null;
+        localStorage.removeItem(STORAGE_KEYS.ACTIVE_ALERT);
+        this.notify();
+        return true;
+      }
+
+      const targetId = alertId || (this.activeAlert ? this.activeAlert.id : 'current');
+      const res = await apiClient.resolveAlert(targetId);
+      if (res.success) {
+        this.activeAlert = null;
+        localStorage.removeItem(STORAGE_KEYS.ACTIVE_ALERT);
+        this.notify();
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      console.error('Alert resolve failed:', err.message);
+      throw err;
+    }
+  }
+
+  // Getters
+  public getCurrentVolunteer(): Volunteer | null {
+    return this.currentVolunteer;
+  }
+
+  public getActiveAlert(): AlertEvent | null {
+    return this.activeAlert;
+  }
+
+  public getChatMessages(): ChatMessage[] {
+    return [...this.chatMessages];
+  }
+
+  public getOfferingBalance(): OfferingBalance {
+    return this.offeringBalance;
+  }
+
+  public getConnectionStatus(): ConnectionStatus {
+    return this.connectionStatus;
+  }
+
+  public isUsingCloud(): boolean {
+    return this.isCloudFirebaseMode;
+  }
+}
+
+export const realtimeStore = new RealtimeStoreService();
