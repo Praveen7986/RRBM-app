@@ -10,6 +10,7 @@
     "server": "node server/server.js",
     "start": "node server/server.js",
     "test:backend": "node scripts/test-backend.js",
+    "test:security": "node scripts/test-security.js",
     "package": "node scripts/package-production.js"
   },
   "dependencies": {
@@ -19,6 +20,7 @@
     "@capacitor/local-notifications": "^8.0.0",
     "clsx": "^2.1.1",
     "firebase": "^13.0.0",
+    "firebase-admin": "^14.5.0",
     "framer-motion": "^12.4.7",
     "lucide-react": "^0.475.0",
     "react": "^19.0.0",

@@ -153,30 +153,60 @@ export const apiClient = {
     return fetchJson<{ success: boolean; balance: OfferingBalance }>('/api/balance');
   },
 
-  async updateOfferingBalance(amount: number, adminPin: string, updatedBy = 'Festival Manager'): Promise<{ success: boolean; balance: OfferingBalance }> {
+  async updateOfferingBalance(amount: number, authTokenOrPin: string, updatedBy = 'Festival Manager'): Promise<{ success: boolean; balance: OfferingBalance }> {
+    const headers: Record<string, string> = {};
+    if (authTokenOrPin && authTokenOrPin.length > 30) {
+      // Firebase ID token
+      headers['Authorization'] = `Bearer ${authTokenOrPin}`;
+    } else {
+      headers['x-admin-pin'] = authTokenOrPin;
+    }
+
     return fetchJson<{ success: boolean; balance: OfferingBalance }>('/api/balance', {
       method: 'POST',
-      headers: {
-        'x-admin-pin': adminPin
-      },
+      headers,
       body: JSON.stringify({ amount, updatedBy })
     });
   },
 
   // 10. Manager Authentication
-  async adminLogin(pin: string): Promise<{ success: boolean; token: string }> {
-    return fetchJson<{ success: boolean; token: string }>('/api/admin/login', {
+  async adminLogin(secretOrPin: string): Promise<{ success: boolean; token: string; customToken?: string | null; role?: string }> {
+    return fetchJson<{ success: boolean; token: string; customToken?: string | null; role?: string }>('/api/admin/login', {
       method: 'POST',
-      body: JSON.stringify({ pin })
+      body: JSON.stringify({ secret: secretOrPin, pin: secretOrPin })
+    });
+  },
+
+  // 10b. Protected Volunteer Account Provisioning (Admin SDK)
+  async createVolunteerAccount(
+    params: {
+      volunteerId: string;
+      fullName: string;
+      initialPassword: string;
+      phone?: string;
+      role?: string;
+    },
+    adminIdToken: string
+  ): Promise<{ success: boolean; message: string; volunteer: { volunteerId: string; uid: string; name: string } }> {
+    return fetchJson<{ success: boolean; message: string; volunteer: { volunteerId: string; uid: string; name: string } }>('/api/admin/volunteers/create', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${adminIdToken}`
+      },
+      body: JSON.stringify(params)
     });
   },
 
   // 11. Manager Stats
-  async getAdminStats(adminPin: string): Promise<{ success: boolean; stats: any }> {
+  async getAdminStats(authTokenOrPin: string): Promise<{ success: boolean; stats: any }> {
+    const headers: Record<string, string> = {};
+    if (authTokenOrPin && authTokenOrPin.length > 30) {
+      headers['Authorization'] = `Bearer ${authTokenOrPin}`;
+    } else {
+      headers['x-admin-pin'] = authTokenOrPin;
+    }
     return fetchJson<{ success: boolean; stats: any }>('/api/admin/stats', {
-      headers: {
-        'x-admin-pin': adminPin
-      }
+      headers
     });
   },
 

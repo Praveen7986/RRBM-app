@@ -3,59 +3,113 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper function to verify if the requester is authenticated
+    // Core Helper Functions
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.admin == true;
+    }
+
+    function volunteerDoc(volId) {
+      return get(/databases/$(database)/documents/volunteers/$(volId));
+    }
+
+    function isVolunteerOwner(volId) {
+      return isAuthenticated() && (
+        request.auth.uid == volunteerDoc(volId).data.uid ||
+        request.auth.token.email == volId.lower() + '@volunteer.rrbm.org'
+      );
+    }
+
     // Volunteers Collection:
-    // - Authenticated volunteers can read volunteer profiles
-    // - Volunteers can only update their own heartbeat / lastActive
-    // - Passwords are never permitted in Firestore
+    // - Authenticated volunteers can read profiles
+    // - Profile creation and deletion strictly reserved for Admin (via Admin SDK)
+    // - Volunteers can only update heartbeat (lastActive) on their own record
     match /volunteers/{volunteerId} {
       allow read: if isAuthenticated();
-      allow update: if isAuthenticated() && (
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastActive', 'active'])
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        isVolunteerOwner(volunteerId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastActive', 'uid'])
       );
-      // Volunteer provisioning is controlled by authenticated admin
-      // Plain passwords are strictly forbidden and rejected from Firestore documents
-      allow create: if isAuthenticated() && 
-        !('password' in request.resource.data) && 
-        !('plainPassword' in request.resource.data) && 
-        !('pwd' in request.resource.data);
-      allow delete: if false;
     }
-    
+
     // Emergency Alerts:
-    // - Authenticated volunteers can read active alerts
-    // - Authenticated volunteers can broadcast alerts and submit responses
+    // - Authenticated volunteers can read alerts
+    // - Volunteers can create/broadcast an emergency alert
+    // - Only Admins can modify status (resolve) or delete alerts
     match /alerts/{alertId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+
+      // Per-Volunteer Alert Responses Subcollection:
+      // - Prevents concurrent overwrite conflicts
+      // - Volunteers can only write to their own response document (/alerts/{alertId}/responses/{volId})
+      // - Strictly validates schema: volunteerId, volunteerName, responseType, updatedAt
+      // - Requires updatedAt == request.time (server timestamp)
+      // - Requires volunteerName == get(/databases/$(database)/documents/volunteers/$(volId)).data.name
+      match /responses/{volId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated() &&
+          isVolunteerOwner(volId) &&
+          request.resource.data.keys().hasOnly(['volunteerId', 'volunteerName', 'responseType', 'updatedAt']) &&
+          request.resource.data.volunteerId == volId &&
+          request.resource.data.responseType in ['coming', 'coming_late', 'not_coming'] &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.volunteerName == volunteerDoc(volId).data.name;
+        allow delete: if isAdmin() || isVolunteerOwner(volId);
+      }
     }
-    
+
     // Alerts History:
     match /alerts_history/{alertId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
     }
 
     // Live Coordination Chat:
-    // - Authenticated volunteers can read coordination chat
-    // - Authenticated volunteers can post messages (up to 1000 chars)
+    // - Authenticated users can read chat
+    // - Creates strictly validate sender identity against authenticated volunteer profile
+    // - Prevents volunteer impersonation
     match /chat/{messageId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000;
-      allow update, delete: if false;
+      allow create: if isAuthenticated() &&
+        request.resource.data.text is string &&
+        request.resource.data.text.size() > 0 &&
+        request.resource.data.text.size() <= 1000 &&
+        request.resource.data.volunteerId is string &&
+        request.resource.data.type in ['chat', 'alert', 'quick_response'] &&
+        (
+          isAdmin() ||
+          (
+            request.resource.data.volunteerId != 'OFFICE' &&
+            request.resource.data.volunteerId != 'LEAD' &&
+            isVolunteerOwner(request.resource.data.volunteerId) &&
+            request.resource.data.senderName == volunteerDoc(request.resource.data.volunteerId).data.name
+          )
+        );
+      allow update, delete: if isAdmin();
     }
 
-    // System Settings & Offering Balance:
+    // System Settings & Money Jar Offering Balance:
+    // - Volunteers can read balance
+    // - Write restricted strictly to authorized Admin
     match /system/{document} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow write: if isAdmin();
     }
-    
-    // Deny all other collections by default
+
+    // Internal rate limits and server state:
+    // - Client access completely forbidden (Admin SDK bypasses security rules)
+    match /system_internal/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Deny all other paths by default
     match /{document=**} {
       allow read, write: if false;
     }

@@ -35,6 +35,8 @@ import { appUpdateManager } from '../services/appUpdateManager';
 import { Volunteer, AlertEvent } from '../types/volunteer';
 import { APP_VERSION } from '../config/appVersion';
 import { UpdateManifest } from '../types/update';
+import { signInWithCustomToken, signOut } from 'firebase/auth';
+import { getFirebaseServices } from '../config/firebase';
 
 interface ManagerModalProps {
   isOpen: boolean;
@@ -44,6 +46,7 @@ interface ManagerModalProps {
 export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) => {
   const [pinInput, setPinInput] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [adminToken, setAdminToken] = useState<string>('');
   const [authError, setAuthError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -130,14 +133,28 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
     setCreateVolSuccess(null);
 
     try {
-      if (realtimeStore.isUsingCloud()) {
-        await firebaseRealtime.createVolunteerAccount(id, name, pwd);
-        setCreateVolSuccess(`Volunteer "${name}" (ID: ${id}) created successfully!`);
+      const { auth } = getFirebaseServices();
+      let token = adminToken;
+      if (auth?.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      }
+
+      if (token) {
+        const res = await apiClient.createVolunteerAccount({
+          volunteerId: id,
+          fullName: name,
+          initialPassword: pwd
+        }, token);
+        setCreateVolSuccess(`Volunteer "${name}" (ID: ${res.volunteer.volunteerId}) provisioned successfully!`);
         setNewVolId('');
         setNewVolName('');
         setNewVolPassword('');
-        const updated = await firebaseRealtime.fetchVolunteersList();
-        setVolunteersList(updated);
+        if (realtimeStore.isUsingCloud()) {
+          const updated = await firebaseRealtime.fetchVolunteersList();
+          setVolunteersList(updated);
+        } else {
+          loadAdminData();
+        }
       } else {
         const res = await apiClient.registerVolunteer(name);
         if (res.success) {
@@ -168,26 +185,32 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pinInput.trim()) return;
+    const secret = pinInput.trim();
+    if (!secret) return;
 
     setIsLoading(true);
     setAuthError('');
 
     try {
-      const res = await apiClient.adminLogin(pinInput.trim());
+      const res = await apiClient.adminLogin(secret);
       if (res.success) {
+        let currentToken = res.token;
+        if (res.customToken) {
+          const { auth } = getFirebaseServices();
+          if (auth) {
+            const userCred = await signInWithCustomToken(auth, res.customToken);
+            currentToken = await userCred.user.getIdToken();
+          }
+        }
+        setAdminToken(currentToken);
         setIsAuthenticated(true);
         setPinInput('');
         loadAdminData();
-      }
-    } catch {
-      // Check local default fallback PIN (2026)
-      if (pinInput.trim() === '2026') {
-        setIsAuthenticated(true);
-        setPinInput('');
       } else {
-        setAuthError('Invalid Manager PIN. Please verify credentials.');
+        setAuthError('Authentication failed.');
       }
+    } catch (err: any) {
+      setAuthError(err.message || 'Invalid Secret Key. Please verify credentials.');
     } finally {
       setIsLoading(false);
     }
@@ -200,7 +223,12 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
 
     setIsLoading(true);
     try {
-      await realtimeStore.updateOfferingBalance(amountNum, '2026', 'Festival Manager');
+      const { auth } = getFirebaseServices();
+      let token = adminToken;
+      if (auth?.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      }
+      await realtimeStore.updateOfferingBalance(amountNum, token, 'Festival Manager');
       setBalanceUpdateSuccess(true);
       setNewBalanceInput('');
       setTimeout(() => setBalanceUpdateSuccess(false), 3000);
@@ -243,10 +271,17 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
     appUpdateManager.checkForUpdates(true);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsAuthenticated(false);
     setPinInput('');
     setAuthError('');
+    setAdminToken('');
+    const { auth } = getFirebaseServices();
+    if (auth && auth.currentUser) {
+      try {
+        await signOut(auth);
+      } catch {}
+    }
   };
 
   if (!isOpen) return null;

@@ -9,9 +9,31 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import os from 'os';
 import { WebSocketServer, WebSocket } from 'ws';
+import admin from 'firebase-admin';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Load environment variables from .env if present
+const envFilePath = path.join(__dirname, '..', '.env');
+if (fs.existsSync(envFilePath)) {
+  const envContent = fs.readFileSync(envFilePath, 'utf8');
+  envContent.split('\n').forEach(line => {
+    const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+    if (match) {
+      const key = match[1];
+      let val = (match[2] || '').trim().replace(/^['"](.*)['"]$/, '$1');
+      if (!process.env[key]) process.env[key] = val;
+    }
+  });
+}
+
+// Fail-secure validation: ADMIN_SECRET is mandatory and must be >= 8 characters
+const ADMIN_SECRET = process.env.ADMIN_SECRET;
+if (!ADMIN_SECRET || ADMIN_SECRET.trim().length < 8) {
+  console.error('[SECURITY FATAL] ADMIN_SECRET environment variable is missing or shorter than 8 characters. Server will not boot with unconfigured or weak secrets.');
+  process.exit(1);
+}
 
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
@@ -19,6 +41,132 @@ const DIST_PATH = path.join(__dirname, '..', 'dist');
 const RELEASES_DIR = path.join(__dirname, 'releases');
 const MANIFEST_PATH = path.join(__dirname, 'data', 'update.json');
 const ADMIN_PIN = process.env.ADMIN_PIN || '2026';
+
+// Initialize Firebase Admin SDK
+let adminApp = null;
+let adminAuth = null;
+let adminDb = null;
+
+try {
+  let credential = undefined;
+  const saKeyJson = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  const saKeyPath = process.env.FIREBASE_SERVICE_ACCOUNT_KEY_PATH;
+
+  if (saKeyJson) {
+    credential = admin.credential.cert(JSON.parse(saKeyJson));
+  } else if (saKeyPath && fs.existsSync(saKeyPath)) {
+    credential = admin.credential.cert(JSON.parse(fs.readFileSync(saKeyPath, 'utf8')));
+  }
+
+  const projectId = process.env.VITE_FIREBASE_PROJECT_ID || 'rrbm-festivals-2026';
+  const appOptions = { projectId };
+  if (credential) {
+    appOptions.credential = credential;
+  }
+  adminApp = admin.initializeApp(appOptions);
+  adminAuth = typeof admin.auth === 'function' ? admin.auth(adminApp) : (typeof adminApp.auth === 'function' ? adminApp.auth() : null);
+  adminDb = typeof admin.firestore === 'function' ? admin.firestore(adminApp) : (typeof adminApp.firestore === 'function' ? adminApp.firestore() : null);
+  console.log('[Firebase Admin] Initialized Firebase Admin SDK for project:', projectId);
+} catch (err) {
+  console.warn('[Firebase Admin] Operating in local/hybrid mode:', err.message);
+}
+
+// Persistent / distributed rate limiting
+const memoryRateLimits = new Map();
+
+async function checkAdminLoginRateLimit(reqOrIp) {
+  const ip = typeof reqOrIp === 'string'
+    ? reqOrIp
+    : (reqOrIp?.headers?.['x-forwarded-for'] || reqOrIp?.socket?.remoteAddress || '127.0.0.1');
+  const clientHash = crypto.createHash('sha256').update(String(ip)).digest('hex').substring(0, 32);
+  const now = Date.now();
+
+  if (adminDb) {
+    try {
+      const docRef = adminDb.collection('system_internal').doc('rate_limits').collection('admin_attempts').doc(clientHash);
+      const snap = await docRef.get();
+      if (snap.exists) {
+        const data = snap.data();
+        if (data.lockedUntil && data.lockedUntil > now) {
+          const remainingSec = Math.ceil((data.lockedUntil - now) / 1000);
+          return { limited: true, retryAfter: remainingSec, clientHash };
+        }
+      }
+    } catch {}
+  }
+
+  const mem = memoryRateLimits.get(clientHash);
+  if (mem && mem.lockedUntil > now) {
+    const remainingSec = Math.ceil((mem.lockedUntil - now) / 1000);
+    return { limited: true, retryAfter: remainingSec, clientHash };
+  }
+
+  return { limited: false, clientHash };
+}
+
+async function recordAdminLoginFailure(clientHash) {
+  const now = Date.now();
+  let count = 1;
+
+  if (adminDb) {
+    try {
+      const docRef = adminDb.collection('system_internal').doc('rate_limits').collection('admin_attempts').doc(clientHash);
+      const snap = await docRef.get();
+      if (snap.exists) {
+        count = (snap.data().failureCount || 0) + 1;
+      }
+      const lockedUntil = count >= 5 ? now + (15 * 60 * 1000) : 0;
+      await docRef.set({
+        clientHash,
+        failureCount: count >= 5 ? 0 : count,
+        lockedUntil,
+        lastAttempt: now
+      }, { merge: true });
+      return;
+    } catch {}
+  }
+
+  const mem = memoryRateLimits.get(clientHash) || { failureCount: 0, lockedUntil: 0 };
+  mem.failureCount += 1;
+  if (mem.failureCount >= 5) {
+    mem.lockedUntil = now + (15 * 60 * 1000);
+    mem.failureCount = 0;
+  }
+  memoryRateLimits.set(clientHash, mem);
+}
+
+async function clearAdminLoginFailures(clientHash) {
+  if (adminDb) {
+    try {
+      await adminDb.collection('system_internal').doc('rate_limits').collection('admin_attempts').doc(clientHash).delete();
+    } catch {}
+  }
+  memoryRateLimits.delete(clientHash);
+}
+
+async function verifyAdminToken(req) {
+  const authHeader = req.headers['authorization'] || '';
+  if (!authHeader.startsWith('Bearer ')) {
+    throw { status: 401, message: 'Unauthorized: Missing Bearer ID Token' };
+  }
+  const idToken = authHeader.split('Bearer ')[1].trim();
+
+  if (!adminAuth) {
+    const pin = req.headers['x-admin-pin'];
+    if (pin && pin === ADMIN_SECRET) return { uid: 'local_admin', admin: true };
+    throw { status: 503, message: 'Firebase Admin Auth is not connected' };
+  }
+
+  try {
+    const decoded = await adminAuth.verifyIdToken(idToken);
+    if (!decoded.admin) {
+      throw { status: 403, message: 'Forbidden: Admin privilege required' };
+    }
+    return decoded;
+  } catch (err) {
+    throw { status: 401, message: `Invalid ID Token: ${err.message}` };
+  }
+}
 
 // Ensure directories exist
 const dataDir = path.join(__dirname, 'data');
@@ -565,59 +713,208 @@ const server = http.createServer((req, res) => {
 
     // 14. Offering Balance API (POST / PUT)
     if (pathname === '/api/balance' && (req.method === 'POST' || req.method === 'PUT')) {
-      const adminPin = req.headers['x-admin-pin'];
-      if (adminPin !== ADMIN_PIN) return sendError(401, 'Unauthorized: Invalid Manager PIN');
+      (async () => {
+        try {
+          const adminUser = await verifyAdminToken(req);
+          const body = await parseJsonBody();
+          const amount = Number(body.amount);
+          if (isNaN(amount) || amount < 0) return sendError(400, 'Invalid offering amount');
 
-      parseJsonBody().then(body => {
-        const amount = Number(body.amount);
-        if (isNaN(amount) || amount < 0) return sendError(400, 'Invalid offering amount');
+          db.offeringBalance = {
+            amount,
+            updatedBy: body.updatedBy || adminUser.name || 'Festival Manager',
+            updatedAt: new Date().toISOString()
+          };
+          saveDb(db);
 
-        db.offeringBalance = {
-          amount,
-          updatedBy: body.updatedBy || 'Festival Manager',
-          updatedAt: new Date().toISOString()
-        };
-        saveDb(db);
+          if (adminDb) {
+            try {
+              await adminDb.collection('system').doc('balance').set({
+                amount,
+                updatedBy: db.offeringBalance.updatedBy,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+              }, { merge: true });
+            } catch (err) {
+              console.error('[OfferingBalance] Failed to sync with Firestore:', err.message);
+            }
+          }
 
-        broadcast('BALANCE_UPDATED', db.offeringBalance);
-        console.log(`[OfferingBalance] Updated to ₹${amount.toLocaleString()} by ${db.offeringBalance.updatedBy}`);
-        sendJson(200, { success: true, balance: db.offeringBalance });
-      }).catch(err => sendError(400, 'Invalid request'));
+          broadcast('BALANCE_UPDATED', db.offeringBalance);
+          console.log(`[OfferingBalance] Updated to ₹${amount.toLocaleString()} by ${db.offeringBalance.updatedBy}`);
+          sendJson(200, { success: true, balance: db.offeringBalance });
+        } catch (err) {
+          sendError(err.status || 401, err.message || 'Unauthorized');
+        }
+      })();
       return;
     }
 
-    // 15. Manager PIN Login (POST)
+    // 15. Manager Login (POST)
     if (pathname === '/api/admin/login' && req.method === 'POST') {
-      parseJsonBody().then(body => {
-        const pin = body.pin || '';
-        if (pin === ADMIN_PIN) {
-          const token = crypto.createHash('sha256').update(pin + Date.now()).digest('hex');
-          sendJson(200, { success: true, token, role: 'manager' });
-        } else {
-          sendError(401, 'Invalid Security PIN');
+      (async () => {
+        try {
+          const rateCheck = await checkAdminLoginRateLimit(req);
+          if (rateCheck.limited) {
+            return sendError(429, `Too many failed login attempts. Account temporarily locked for ${rateCheck.retryAfter} minutes.`);
+          }
+
+          const body = await parseJsonBody();
+          const userSecret = String(body.secret || body.pin || '');
+          const isMatch = (userSecret.length === ADMIN_SECRET.length) && crypto.timingSafeEqual(Buffer.from(userSecret), Buffer.from(ADMIN_SECRET));
+
+          if (!isMatch) {
+            await recordAdminLoginFailure(rateCheck.clientHash);
+            return sendError(401, 'Invalid Admin Secret Key');
+          }
+
+          // Success - clear failure counter
+          await clearAdminLoginFailures(rateCheck.clientHash);
+
+          // If Firebase Admin Auth is active, mint a Custom Token with admin claim { admin: true }
+          let customToken = null;
+          if (adminAuth) {
+            customToken = await adminAuth.createCustomToken('rrbm-manager-admin', {
+              admin: true,
+              role: 'manager'
+            });
+          }
+
+          const sessionToken = crypto.randomBytes(32).toString('hex');
+          sendJson(200, {
+            success: true,
+            customToken,
+            token: sessionToken,
+            role: 'manager'
+          });
+        } catch (err) {
+          console.error('[AdminLogin] Error:', err);
+          sendError(500, 'Internal server error during authentication');
         }
-      }).catch(() => sendError(400, 'Invalid request'));
+      })();
       return;
     }
 
     // 16. Manager Stats (GET)
     if (pathname === '/api/admin/stats' && req.method === 'GET') {
-      const adminPin = req.headers['x-admin-pin'];
-      if (adminPin !== ADMIN_PIN) return sendError(401, 'Unauthorized');
-
-      sendJson(200, {
-        success: true,
-        stats: {
-          volunteersCount: db.volunteers.length,
-          volunteersList: db.volunteers,
-          devicesCount: (db.devices || []).length,
-          activeAlert: db.activeAlert,
-          alertsCount: (db.alertsHistory || []).length,
-          chatMessagesCount: db.chatMessages.length,
-          offeringBalance: db.offeringBalance,
-          connectedSockets: wss.clients.size
+      (async () => {
+        try {
+          await verifyAdminToken(req);
+          sendJson(200, {
+            success: true,
+            stats: {
+              volunteersCount: db.volunteers.length,
+              volunteersList: db.volunteers,
+              devicesCount: (db.devices || []).length,
+              activeAlert: db.activeAlert,
+              alertsCount: (db.alertsHistory || []).length,
+              chatMessagesCount: db.chatMessages.length,
+              offeringBalance: db.offeringBalance,
+              connectedSockets: wss.clients.size
+            }
+          });
+        } catch (err) {
+          sendError(err.status || 401, err.message || 'Unauthorized');
         }
-      });
+      })();
+      return;
+    }
+
+    // 16b. Protected Volunteer Account Provisioning (POST)
+    if (pathname === '/api/admin/volunteers/create' && req.method === 'POST') {
+      (async () => {
+        try {
+          const adminUser = await verifyAdminToken(req);
+          const body = await parseJsonBody();
+          const { volunteerId, fullName, initialPassword, phone, role } = body;
+
+          const sanitizedId = String(volunteerId || '').trim().toUpperCase();
+          if (!sanitizedId || sanitizedId.length < 3) {
+            return sendError(400, 'Volunteer ID must be at least 3 characters');
+          }
+          if (!fullName || typeof fullName !== 'string' || !fullName.trim()) {
+            return sendError(400, 'Full name is required');
+          }
+          if (!initialPassword || initialPassword.length < 6) {
+            return sendError(400, 'Initial password must be at least 6 characters');
+          }
+
+          if (!adminAuth) {
+            return sendError(503, 'Firebase Admin Auth is not configured on this server');
+          }
+
+          const cleanId = sanitizedId.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+          const email = `${cleanId}@volunteer.rrbm.org`;
+          try {
+            const existing = await adminAuth.getUserByEmail(email);
+            if (existing) {
+              return sendError(409, `Volunteer ${sanitizedId} already exists in Firebase Auth`);
+            }
+          } catch (e) {
+            if (e.code !== 'auth/user-not-found') {
+              throw e;
+            }
+          }
+
+          const userRecord = await adminAuth.createUser({
+            email,
+            password: initialPassword,
+            displayName: fullName.trim(),
+            disabled: false
+          });
+
+          try {
+            if (adminDb) {
+              await adminDb.collection('volunteers').doc(sanitizedId).set({
+                volunteerId: sanitizedId,
+                uid: userRecord.uid,
+                name: fullName.trim(),
+                role: role || 'General Volunteer',
+                phone: phone || '',
+                active: true,
+                lastActive: admin.firestore.FieldValue.serverTimestamp(),
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+            }
+
+            const existingIdx = db.volunteers.findIndex(v => v.id.toUpperCase() === sanitizedId);
+            const volEntry = {
+              id: sanitizedId,
+              name: fullName.trim(),
+              phone: phone || '',
+              role: role || 'General Volunteer',
+              registeredAt: new Date().toISOString()
+            };
+            if (existingIdx >= 0) {
+              db.volunteers[existingIdx] = volEntry;
+            } else {
+              db.volunteers.push(volEntry);
+            }
+            saveDb(db);
+
+            console.log(`[AdminProvisioning] Volunteer ${sanitizedId} provisioned by admin ${adminUser.uid}`);
+            sendJson(201, {
+              success: true,
+              message: `Volunteer ${sanitizedId} provisioned successfully`,
+              volunteer: {
+                volunteerId: sanitizedId,
+                uid: userRecord.uid,
+                name: fullName.trim()
+              }
+            });
+          } catch (profileErr) {
+            console.error(`[AdminProvisioning] Firestore profile creation failed. Rolling back Auth user ${userRecord.uid}:`, profileErr);
+            try {
+              await adminAuth.deleteUser(userRecord.uid);
+              console.log(`[AdminProvisioning] Rollback success: deleted user ${userRecord.uid}`);
+            } catch (delErr) {
+              console.error(`[AdminProvisioning] CRITICAL: Rollback failed:`, delErr);
+            }
+            sendError(500, `Failed to save volunteer profile: ${profileErr.message}`);
+          }
+        } catch (err) {
+          sendError(err.status || 401, err.message || 'Unauthorized');
+        }
+      })();
       return;
     }
 

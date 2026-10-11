@@ -25,6 +25,7 @@ import { initializeApp, deleteApp } from 'firebase/app';
 import { getFirebaseServices, isFirebaseConfigured, getActiveFirebaseConfig } from '../config/firebase';
 import { Volunteer, AlertEvent, ChatMessage, OfferingBalance } from '../types/volunteer';
 import { triggerAlertSoundAndVibration, triggerChatNotification } from './audioNotification';
+import { apiClient } from './api';
 
 /**
  * Maps a human-friendly Volunteer ID (e.g. "001", "002", "261")
@@ -145,8 +146,11 @@ export class FirebaseRealtimeService {
           role: data.role || 'volunteer'
         };
 
-        // Update heartbeat / last active
-        await setDoc(volunteerRef, { lastActive: serverTimestamp() }, { merge: true });
+        // Update heartbeat / last active and bind Firebase Auth UID
+        await setDoc(volunteerRef, {
+          lastActive: serverTimestamp(),
+          uid: userCredential.user.uid
+        }, { merge: true });
       } else {
         // Fallback profile if Firestore document is pending creation
         volunteer = {
@@ -156,11 +160,16 @@ export class FirebaseRealtimeService {
           active: true,
           role: 'volunteer'
         };
-        await setDoc(volunteerRef, {
-          ...volunteer,
-          createdAt: serverTimestamp(),
-          lastActive: serverTimestamp()
-        }, { merge: true });
+        try {
+          await setDoc(volunteerRef, {
+            ...volunteer,
+            uid: userCredential.user.uid,
+            createdAt: serverTimestamp(),
+            lastActive: serverTimestamp()
+          }, { merge: true });
+        } catch {
+          // If Firestore security rules restrict self-creation, continue with local volunteer object
+        }
       }
 
       this.currentVolunteer = volunteer;
@@ -202,11 +211,11 @@ export class FirebaseRealtimeService {
     this.currentVolunteer = null;
   }
 
-  // 3. Admin Account Creation (Isolated Secondary App Instance)
+  // 3. Admin Account Creation (Protected Backend Provisioning)
   public async createVolunteerAccount(volunteerId: string, name: string, initialPassword: string): Promise<Volunteer> {
-    const { db } = getFirebaseServices();
-    if (!db) {
-      throw new Error('Firebase Firestore is not initialized.');
+    const { auth } = getFirebaseServices();
+    if (!auth || !auth.currentUser) {
+      throw new Error('Admin authentication required to provision volunteer accounts.');
     }
 
     const trimmedId = volunteerId.trim();
@@ -218,51 +227,20 @@ export class FirebaseRealtimeService {
       throw new Error('Password must be at least 6 characters long.');
     }
 
-    const email = volunteerIdToEmail(trimmedId);
-    const config = getActiveFirebaseConfig();
-    const secondaryAppName = `ProvisionAdmin_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const secondaryApp = initializeApp(config, secondaryAppName);
-    const secondaryAuth = getAuth(secondaryApp);
+    const idToken = await auth.currentUser.getIdToken();
+    const res = await apiClient.createVolunteerAccount({
+      volunteerId: trimmedId,
+      fullName: trimmedName,
+      initialPassword
+    }, idToken);
 
-    try {
-      // 1. Create Identity in Firebase Authentication
-      await createUserWithEmailAndPassword(secondaryAuth, email, initialPassword);
-
-      // 2. Write Volunteer Metadata into Cloud Firestore (NO PLAINTEXT PASSWORDS)
-      const volunteerRef = doc(db, 'volunteers', trimmedId);
-      const volunteerRecord: Volunteer = {
-        id: trimmedId,
-        name: trimmedName,
-        registeredAt: new Date().toISOString(),
-        active: true,
-        role: 'volunteer'
-      };
-
-      await setDoc(volunteerRef, {
-        id: trimmedId,
-        name: trimmedName,
-        role: 'volunteer',
-        active: true,
-        createdAt: serverTimestamp(),
-        lastActive: serverTimestamp(),
-        createdBy: 'admin'
-      });
-
-      return volunteerRecord;
-    } catch (err: any) {
-      if (err.code === 'auth/email-already-in-use') {
-        throw new Error(`Volunteer ID "${trimmedId}" already exists. Please choose a different ID.`);
-      } else if (err.code === 'auth/weak-password') {
-        throw new Error('Password is too weak. Please use at least 6 characters.');
-      } else if (err.code === 'auth/configuration-not-found') {
-        throw new Error('Firebase Authentication is not yet enabled. In Firebase Console, go to Authentication > Sign-in method and enable Email/Password.');
-      }
-      throw new Error(err.message || 'Failed to create volunteer account.');
-    } finally {
-      try {
-        await deleteApp(secondaryApp);
-      } catch {}
-    }
+    return {
+      id: res.volunteer.volunteerId,
+      name: res.volunteer.name,
+      registeredAt: new Date().toISOString(),
+      active: true,
+      role: 'volunteer'
+    };
   }
 
   // 4. Fetch All Registered Volunteers (for Coordinator Dashboard)
@@ -370,6 +348,7 @@ export class FirebaseRealtimeService {
   }
 
   // 3. Quick Responses (I'M COMING / COMING LATE / CAN'T COME)
+  // Writes to isolated per-volunteer response subcollection: /alerts/current/responses/{volunteerId}
   public async sendQuickResponse(
     volunteerId: string,
     volunteerName: string,
@@ -380,26 +359,14 @@ export class FirebaseRealtimeService {
 
     await this.ensureAuthenticated();
 
-    const activeAlertRef = doc(db, 'alerts', 'current');
-    const alertSnap = await getDoc(activeAlertRef);
-
-    if (alertSnap.exists()) {
-      const data = alertSnap.data();
-      const responses = data.responses || { coming: [], coming_late: [], not_coming: [] };
-
-      // Remove volunteer from other buckets
-      ['coming', 'coming_late', 'not_coming'].forEach(k => {
-        if (responses[k]) {
-          responses[k] = responses[k].filter((id: string) => id !== volunteerId);
-        }
-      });
-
-      // Add to selected bucket
-      if (!responses[responseType]) responses[responseType] = [];
-      responses[responseType].push(volunteerId);
-
-      await setDoc(activeAlertRef, { responses }, { merge: true });
-    }
+    // Isolated per-volunteer subcollection write (prevents race condition overwrites)
+    const responseDocRef = doc(db, 'alerts', 'current', 'responses', volunteerId);
+    await setDoc(responseDocRef, {
+      volunteerId,
+      volunteerName: volunteerName || `Volunteer ${volunteerId}`,
+      responseType,
+      updatedAt: serverTimestamp()
+    });
 
     // Post to live chat
     const text = responseType === 'coming'
@@ -461,49 +428,98 @@ export class FirebaseRealtimeService {
     await setDoc(activeAlertRef, { status: 'resolved', resolvedAt: new Date().toISOString() }, { merge: true });
   }
 
-  // 6. Listen for Active Alerts in Real Time across all Internet Devices
+  // 6. Listen for Active Alerts and Per-Volunteer Responses in Real Time
   public subscribeToAlerts(callback: (alert: AlertEvent | null) => void): () => void {
     const { db } = getFirebaseServices();
     if (!db) return () => {};
 
     const activeAlertRef = doc(db, 'alerts', 'current');
+    const responsesColRef = collection(db, 'alerts', 'current', 'responses');
     let lastAlertId: string | null = null;
+    let currentAlertBase: AlertEvent | null = null;
+    let cachedResponses: { coming: string[]; coming_late: string[]; not_coming: string[] } = {
+      coming: [],
+      coming_late: [],
+      not_coming: []
+    };
 
-    const unsub = onSnapshot(activeAlertRef, (snapshot) => {
+    const emitMergedAlert = () => {
+      if (!currentAlertBase) {
+        callback(null);
+        return;
+      }
+      callback({
+        ...currentAlertBase,
+        responses: { ...cachedResponses }
+      });
+    };
+
+    const unsubAlert = onSnapshot(activeAlertRef, (snapshot) => {
       if (!snapshot.exists()) {
+        currentAlertBase = null;
         callback(null);
         return;
       }
 
       const data = snapshot.data();
       if (data.status === 'resolved') {
+        currentAlertBase = null;
         callback(null);
         return;
       }
 
-      const alert: AlertEvent = {
+      currentAlertBase = {
         id: data.id || 'current',
         triggeredBy: data.triggeredBy || { id: 'OFFICE', name: 'Altar Desk' },
         message: data.message || '',
         status: data.status || 'active',
         createdAt: data.createdAt || new Date().toISOString(),
         timeFormatted: data.timeFormatted || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        responses: data.responses || { coming: [], coming_late: [], not_coming: [] }
+        responses: cachedResponses
       };
 
-      // If a brand new alert arrived from another volunteer, trigger vibration and siren!
-      if (lastAlertId && lastAlertId !== alert.id) {
-        triggerAlertSoundAndVibration('🚨 RRBM VOLUNTEER ALERT', alert.message);
+      if (lastAlertId && lastAlertId !== currentAlertBase.id) {
+        triggerAlertSoundAndVibration('🚨 RRBM VOLUNTEER ALERT', currentAlertBase.message);
       }
-      lastAlertId = alert.id;
+      lastAlertId = currentAlertBase.id;
 
-      callback(alert);
+      emitMergedAlert();
     }, (err) => {
       console.warn('[Firebase Firestore] Alert listener error:', err);
     });
 
-    this.unsubs.push(unsub);
-    return unsub;
+    const unsubResponses = onSnapshot(responsesColRef, (snapshot) => {
+      const responses: { coming: string[]; coming_late: string[]; not_coming: string[] } = {
+        coming: [],
+        coming_late: [],
+        not_coming: []
+      };
+
+      snapshot.forEach(docSnap => {
+        const d = docSnap.data();
+        const vId = d.volunteerId || docSnap.id;
+        if (d.responseType === 'coming') {
+          responses.coming.push(vId);
+        } else if (d.responseType === 'coming_late') {
+          responses.coming_late.push(vId);
+        } else if (d.responseType === 'not_coming') {
+          responses.not_coming.push(vId);
+        }
+      });
+
+      cachedResponses = responses;
+      emitMergedAlert();
+    }, (err) => {
+      console.warn('[Firebase Firestore] Alert responses listener error:', err);
+    });
+
+    const combinedUnsub = () => {
+      unsubAlert();
+      unsubResponses();
+    };
+
+    this.unsubs.push(combinedUnsub);
+    return combinedUnsub;
   }
 
   // 7. Listen for Live Chat Messages in Real Time across Internet Devices
