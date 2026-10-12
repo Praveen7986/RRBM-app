@@ -9,7 +9,9 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import os from 'os';
 import { WebSocketServer, WebSocket } from 'ws';
-import admin from 'firebase-admin';
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,20 +54,20 @@ try {
   const saKeyPath = process.env.FIREBASE_SERVICE_ACCOUNT_KEY_PATH;
 
   if (saKeyJson) {
-    credential = admin.credential.cert(JSON.parse(saKeyJson));
+    credential = cert(JSON.parse(saKeyJson));
   } else if (saKeyPath && fs.existsSync(saKeyPath)) {
-    credential = admin.credential.cert(JSON.parse(fs.readFileSync(saKeyPath, 'utf8')));
+    credential = cert(JSON.parse(fs.readFileSync(saKeyPath, 'utf8')));
   }
 
   const projectId = process.env.VITE_FIREBASE_PROJECT_ID || 'rrbm-festivals-2026';
-  const appOptions = { projectId };
   if (credential) {
-    appOptions.credential = credential;
+    adminApp = initializeApp({ projectId, credential });
+    adminAuth = getAuth(adminApp);
+    adminDb = getFirestore(adminApp);
+    console.log('[Firebase Admin] Initialized Firebase Admin SDK for project:', projectId);
+  } else {
+    console.log('[Firebase Admin] Operating in local/hybrid mode: No service account credential provided');
   }
-  adminApp = admin.initializeApp(appOptions);
-  adminAuth = typeof admin.auth === 'function' ? admin.auth(adminApp) : (typeof adminApp.auth === 'function' ? adminApp.auth() : null);
-  adminDb = typeof admin.firestore === 'function' ? admin.firestore(adminApp) : (typeof adminApp.firestore === 'function' ? adminApp.firestore() : null);
-  console.log('[Firebase Admin] Initialized Firebase Admin SDK for project:', projectId);
 } catch (err) {
   console.warn('[Firebase Admin] Operating in local/hybrid mode:', err.message);
 }
@@ -784,7 +786,7 @@ const server = http.createServer((req, res) => {
               await adminDb.collection('system').doc('balance').set({
                 amount,
                 updatedBy: db.offeringBalance.updatedBy,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                updatedAt: FieldValue.serverTimestamp()
               }, { merge: true });
             } catch (err) {
               console.error('[OfferingBalance] Failed to sync with Firestore:', err.message);
@@ -927,8 +929,8 @@ const server = http.createServer((req, res) => {
                 role: role || 'General Volunteer',
                 phone: phone || '',
                 active: true,
-                lastActive: admin.firestore.FieldValue.serverTimestamp(),
-                createdAt: admin.firestore.FieldValue.serverTimestamp()
+                lastActive: FieldValue.serverTimestamp(),
+                createdAt: FieldValue.serverTimestamp()
               });
             }
 
@@ -1001,7 +1003,7 @@ const server = http.createServer((req, res) => {
             try {
               await adminDb.collection('volunteers').doc(sanitizedId).set({
                 active: volunteer.active,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                updatedAt: FieldValue.serverTimestamp()
               }, { merge: true });
             } catch {}
           }
