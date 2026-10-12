@@ -53,7 +53,7 @@ It provides instantaneous volunteer alerting, real-time response tracking, live 
 - Authoritative financial balance synchronized directly from the server.
 
 ### 6. 🔐 Manager Desk & Admin Portal
-- Authenticated manager access protected by secure PIN (Default: `2026`).
+- Authenticated manager access protected by strong `ADMIN_SECRET` environment variable.
 - **Live Financial Offering Publisher**: Modify offering balance and broadcast updates in real time to all volunteer devices.
 - **Active Alert Management**: View volunteer response rosters and resolve alerts.
 - **Registered Volunteer Directory**: View full list of volunteers with assigned server IDs and timestamps.

@@ -340,7 +340,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                   Manager Verification
                 </h4>
                 <p className="text-xs text-slate-400 max-w-xs mt-1">
-                  Enter authorized manager PIN to update live financial offerings, control alerts, and manage APK releases.
+                  Enter authorized Secret Key to update live financial offerings, control alerts, and manage APK releases.
                 </p>
               </div>
 
@@ -348,11 +348,11 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                 <div>
                   <input
                     type="password"
-                    maxLength={10}
-                    placeholder="Enter PIN (e.g. 2026)"
+                    maxLength={128}
+                    placeholder="Enter Secret Key"
                     value={pinInput}
                     onChange={(e) => setPinInput(e.target.value)}
-                    className="w-full text-center tracking-widest text-lg font-mono font-black py-3 px-4 rounded-2xl bg-[#101c36] border border-sky-500/40 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                    className="w-full text-center tracking-widest text-base font-mono font-bold py-3 px-4 rounded-2xl bg-[#101c36] border border-sky-500/40 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
                     autoFocus
                   />
                 </div>

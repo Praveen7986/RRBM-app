@@ -40,7 +40,6 @@ const DB_PATH = path.join(__dirname, 'data', 'db.json');
 const DIST_PATH = path.join(__dirname, '..', 'dist');
 const RELEASES_DIR = path.join(__dirname, 'releases');
 const MANIFEST_PATH = path.join(__dirname, 'data', 'update.json');
-const ADMIN_PIN = process.env.ADMIN_PIN || '2026';
 
 // Initialize Firebase Admin SDK
 let adminApp = null;

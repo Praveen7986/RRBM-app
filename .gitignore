@@ -35,7 +35,12 @@ dist-packages/
 # Credentials & Service Accounts
 *google-services.json
 *firebase-adminsdk*.json
+*firebase-admin*.json
 *service-account*.json
+*serviceAccount*.json
+*service_account*.json
+*credentials*.json
+*secret*.json
 *.pem
 *.key
 *.p12

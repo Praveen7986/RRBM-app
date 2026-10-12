@@ -93,6 +93,36 @@ async function runSecurityTests() {
     'Chat messages strictly validate sender identity against authenticated volunteer profile (anti-impersonation)'
   );
 
+  assert(
+    rulesContent.includes("request.resource.data.status == 'active'") &&
+    rulesContent.includes('isVolunteerOwner(request.resource.data.triggeredBy.id)'),
+    'Alert creation requires status == "active" and triggeredBy.id to match authenticated volunteer'
+  );
+
+  assert(
+    rulesContent.includes("hasOnly(['lastActive'])") &&
+    !rulesContent.includes("hasOnly(['lastActive', 'uid'])"),
+    'Volunteer profile updates restrict affected keys strictly to lastActive (uid cannot be changed)'
+  );
+
+  assert(
+    rulesContent.includes('isParentAlertActive(alertId)'),
+    'Alert responses are only allowed when the parent alert is currently active'
+  );
+
+  assert(
+    rulesContent.includes('match /responses/{volId}') &&
+    rulesContent.includes('allow delete: if isAdmin();') &&
+    !rulesContent.includes('allow delete: if isAdmin() || isVolunteerOwner(volId);'),
+    'Alert response deletion is reserved exclusively for admins'
+  );
+
+  assert(
+    rulesContent.includes('match /alerts/{alertId}') &&
+    rulesContent.includes('allow update, delete: if isAdmin();'),
+    'Alert status updates (resolving) and deletion are restricted exclusively to admins'
+  );
+
   console.log('  All static Firestore rules assertions passed!\n');
 
   // ---------------------------------------------------------
