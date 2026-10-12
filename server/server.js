@@ -143,21 +143,35 @@ async function clearAdminLoginFailures(clientHash) {
   memoryRateLimits.delete(clientHash);
 }
 
+const activeAdminSessions = new Set();
+
 async function verifyAdminToken(req) {
   const authHeader = req.headers['authorization'] || '';
-  if (!authHeader.startsWith('Bearer ')) {
-    throw { status: 401, message: 'Unauthorized: Missing Bearer ID Token' };
-  }
-  const idToken = authHeader.split('Bearer ')[1].trim();
+  const pinHeader = req.headers['x-admin-pin'];
 
+  // 1. Direct header verification with ADMIN_SECRET using constant-time comparison
+  if (pinHeader && pinHeader.length === ADMIN_SECRET.length && crypto.timingSafeEqual(Buffer.from(pinHeader), Buffer.from(ADMIN_SECRET))) {
+    return { uid: 'local_admin', admin: true };
+  }
+
+  // 2. Bearer Token Verification
+  if (!authHeader.startsWith('Bearer ')) {
+    throw { status: 401, message: 'Unauthorized: Missing Bearer ID Token or Admin Pin' };
+  }
+  const token = authHeader.split('Bearer ')[1].trim();
+
+  // Check valid issued session token from /api/admin/login
+  if (activeAdminSessions.has(token)) {
+    return { uid: 'admin_session', admin: true };
+  }
+
+  // 3. Firebase Admin ID Token Verification
   if (!adminAuth) {
-    const pin = req.headers['x-admin-pin'];
-    if (pin && pin === ADMIN_SECRET) return { uid: 'local_admin', admin: true };
-    throw { status: 503, message: 'Firebase Admin Auth is not connected' };
+    throw { status: 401, message: 'Unauthorized: Invalid Admin Token' };
   }
 
   try {
-    const decoded = await adminAuth.verifyIdToken(idToken);
+    const decoded = await adminAuth.verifyIdToken(token);
     if (!decoded.admin) {
       throw { status: 403, message: 'Forbidden: Admin privilege required' };
     }
@@ -385,38 +399,77 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    // 3. Volunteer Registration (POST)
-    if (pathname === '/api/volunteers/register' && req.method === 'POST') {
-      parseJsonBody().then(body => {
-        const name = (body.name || '').trim();
-        if (!name) return sendError(400, 'Volunteer name is required.');
+    // 3. Volunteer Login with ID & Password (POST)
+    if (pathname === '/api/volunteers/login' && req.method === 'POST') {
+      (async () => {
+        try {
+          const body = await parseJsonBody();
+          const volunteerId = String(body.volunteerId || body.id || '').trim().toUpperCase();
+          const password = String(body.password || '').trim();
 
-        const existing = db.volunteers.find(v => v.name.toLowerCase() === name.toLowerCase());
-        if (existing) {
-          existing.lastActive = new Date().toISOString();
+          if (!volunteerId || !password) {
+            return sendError(400, 'Volunteer ID and password are required');
+          }
+
+          const volunteer = db.volunteers.find(v => String(v.id).toUpperCase() === volunteerId);
+          if (!volunteer) {
+            return sendError(401, 'Invalid Volunteer ID or password');
+          }
+
+          if (volunteer.active === false) {
+            return sendError(403, 'This volunteer account has been deactivated. Please contact your coordinator');
+          }
+
+          if (!volunteer.passwordHash || !volunteer.salt) {
+            return sendError(401, 'Volunteer account not provisioned. Please contact your coordinator');
+          }
+
+          const calculated = crypto.scryptSync(password, volunteer.salt, 64);
+          const expected = Buffer.from(volunteer.passwordHash, 'hex');
+          const isMatch = (calculated.length === expected.length) && crypto.timingSafeEqual(calculated, expected);
+
+          if (!isMatch) {
+            return sendError(401, 'Invalid Volunteer ID or password');
+          }
+
+          volunteer.lastActive = new Date().toISOString();
           saveDb(db);
-          broadcast('VOLUNTEER_REGISTERED', existing);
-          console.log(`[Volunteer] Existing volunteer '${name}' reconnected (ID: ${existing.id})`);
-          return sendJson(200, { success: true, volunteer: existing, reused: true });
+
+          let customToken = null;
+          if (adminAuth) {
+            try {
+              customToken = await adminAuth.createCustomToken(volunteer.uid || volunteer.id, {
+                role: volunteer.role || 'volunteer'
+              });
+            } catch (tErr) {
+              console.warn('[VolunteerLogin] Custom token creation notice:', tErr.message);
+            }
+          }
+
+          const sessionToken = crypto.randomBytes(32).toString('hex');
+          sendJson(200, {
+            success: true,
+            volunteer: {
+              id: volunteer.id,
+              name: volunteer.name,
+              role: volunteer.role || 'volunteer',
+              active: true,
+              registeredAt: volunteer.registeredAt
+            },
+            token: sessionToken,
+            customToken
+          });
+        } catch (err) {
+          console.error('[VolunteerLogin] Error:', err);
+          sendError(500, 'Internal server error during volunteer login');
         }
+      })();
+      return;
+    }
 
-        db.lastVolunteerId += 1;
-        const newVolunteer = {
-          id: db.lastVolunteerId.toString(),
-          name: name,
-          registeredAt: new Date().toISOString(),
-          lastActive: new Date().toISOString(),
-          active: true,
-          role: body.isLeader ? 'leader' : 'volunteer'
-        };
-
-        db.volunteers.push(newVolunteer);
-        saveDb(db);
-
-        broadcast('VOLUNTEER_REGISTERED', newVolunteer);
-        console.log(`[Volunteer] Registered new volunteer '${name}' with ID ${newVolunteer.id}`);
-        sendJson(201, { success: true, volunteer: newVolunteer });
-      }).catch(err => sendError(400, 'Invalid JSON body'));
+    // 3b. Legacy Check-In (POST)
+    if (pathname === '/api/volunteers/register' && req.method === 'POST') {
+      sendError(403, 'Self-registration is disabled. Please sign in with your assigned Volunteer ID and password');
       return;
     }
 
@@ -779,6 +832,7 @@ const server = http.createServer((req, res) => {
           }
 
           const sessionToken = crypto.randomBytes(32).toString('hex');
+          activeAdminSessions.add(sessionToken);
           sendJson(200, {
             success: true,
             customToken,
@@ -837,32 +891,35 @@ const server = http.createServer((req, res) => {
             return sendError(400, 'Initial password must be at least 6 characters');
           }
 
-          if (!adminAuth) {
-            return sendError(503, 'Firebase Admin Auth is not configured on this server');
+          // Cryptographic password hashing (scrypt with random 16-byte salt)
+          const salt = crypto.randomBytes(16).toString('hex');
+          const passwordHash = crypto.scryptSync(initialPassword, salt, 64).toString('hex');
+
+          let userRecord = null;
+          if (adminAuth) {
+            const cleanId = sanitizedId.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+            const email = `${cleanId}@volunteer.rrbm.org`;
+            try {
+              const existing = await adminAuth.getUserByEmail(email);
+              if (existing) {
+                return sendError(409, `Volunteer ${sanitizedId} already exists in Firebase Auth`);
+              }
+            } catch (e) {
+              if (e.code !== 'auth/user-not-found') {
+                throw e;
+              }
+            }
+
+            userRecord = await adminAuth.createUser({
+              email,
+              password: initialPassword,
+              displayName: fullName.trim(),
+              disabled: false
+            });
           }
 
-          const cleanId = sanitizedId.toLowerCase().replace(/[^a-z0-9_-]/g, '');
-          const email = `${cleanId}@volunteer.rrbm.org`;
           try {
-            const existing = await adminAuth.getUserByEmail(email);
-            if (existing) {
-              return sendError(409, `Volunteer ${sanitizedId} already exists in Firebase Auth`);
-            }
-          } catch (e) {
-            if (e.code !== 'auth/user-not-found') {
-              throw e;
-            }
-          }
-
-          const userRecord = await adminAuth.createUser({
-            email,
-            password: initialPassword,
-            displayName: fullName.trim(),
-            disabled: false
-          });
-
-          try {
-            if (adminDb) {
+            if (adminDb && userRecord) {
               await adminDb.collection('volunteers').doc(sanitizedId).set({
                 volunteerId: sanitizedId,
                 uid: userRecord.uid,
@@ -875,13 +932,17 @@ const server = http.createServer((req, res) => {
               });
             }
 
-            const existingIdx = db.volunteers.findIndex(v => v.id.toUpperCase() === sanitizedId);
+            const existingIdx = db.volunteers.findIndex(v => String(v.id).toUpperCase() === sanitizedId);
             const volEntry = {
               id: sanitizedId,
               name: fullName.trim(),
               phone: phone || '',
               role: role || 'General Volunteer',
-              registeredAt: new Date().toISOString()
+              registeredAt: new Date().toISOString(),
+              active: true,
+              salt,
+              passwordHash,
+              uid: userRecord ? userRecord.uid : undefined
             };
             if (existingIdx >= 0) {
               db.volunteers[existingIdx] = volEntry;
@@ -896,20 +957,107 @@ const server = http.createServer((req, res) => {
               message: `Volunteer ${sanitizedId} provisioned successfully`,
               volunteer: {
                 volunteerId: sanitizedId,
-                uid: userRecord.uid,
+                uid: userRecord ? userRecord.uid : sanitizedId,
                 name: fullName.trim()
               }
             });
           } catch (profileErr) {
-            console.error(`[AdminProvisioning] Firestore profile creation failed. Rolling back Auth user ${userRecord.uid}:`, profileErr);
-            try {
-              await adminAuth.deleteUser(userRecord.uid);
-              console.log(`[AdminProvisioning] Rollback success: deleted user ${userRecord.uid}`);
-            } catch (delErr) {
-              console.error(`[AdminProvisioning] CRITICAL: Rollback failed:`, delErr);
+            console.error(`[AdminProvisioning] Firestore profile creation failed:`, profileErr);
+            if (adminAuth && userRecord) {
+              try {
+                await adminAuth.deleteUser(userRecord.uid);
+                console.log(`[AdminProvisioning] Rollback success: deleted user ${userRecord.uid}`);
+              } catch (delErr) {
+                console.error(`[AdminProvisioning] CRITICAL: Rollback failed:`, delErr);
+              }
             }
             sendError(500, `Failed to save volunteer profile: ${profileErr.message}`);
           }
+        } catch (err) {
+          sendError(err.status || 401, err.message || 'Unauthorized');
+        }
+      })();
+      return;
+    }
+
+    // 16c. Admin Volunteer Status Toggle (POST)
+    if (pathname === '/api/admin/volunteers/status' && req.method === 'POST') {
+      (async () => {
+        try {
+          await verifyAdminToken(req);
+          const body = await parseJsonBody();
+          const { volunteerId, active } = body;
+          const sanitizedId = String(volunteerId || '').trim().toUpperCase();
+
+          const volunteer = db.volunteers.find(v => String(v.id).toUpperCase() === sanitizedId);
+          if (!volunteer) {
+            return sendError(404, 'Volunteer not found');
+          }
+
+          volunteer.active = active !== false;
+          saveDb(db);
+
+          if (adminDb) {
+            try {
+              await adminDb.collection('volunteers').doc(sanitizedId).set({
+                active: volunteer.active,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+              }, { merge: true });
+            } catch {}
+          }
+
+          if (adminAuth && volunteer.uid) {
+            try {
+              await adminAuth.updateUser(volunteer.uid, { disabled: !volunteer.active });
+            } catch {}
+          }
+
+          sendJson(200, {
+            success: true,
+            volunteerId: sanitizedId,
+            active: volunteer.active
+          });
+        } catch (err) {
+          sendError(err.status || 401, err.message || 'Unauthorized');
+        }
+      })();
+      return;
+    }
+
+    // 16d. Admin Volunteer Password Reset (POST)
+    if (pathname === '/api/admin/volunteers/reset-password' && req.method === 'POST') {
+      (async () => {
+        try {
+          await verifyAdminToken(req);
+          const body = await parseJsonBody();
+          const { volunteerId, newPassword } = body;
+          const sanitizedId = String(volunteerId || '').trim().toUpperCase();
+
+          if (!newPassword || newPassword.length < 6) {
+            return sendError(400, 'New password must be at least 6 characters');
+          }
+
+          const volunteer = db.volunteers.find(v => String(v.id).toUpperCase() === sanitizedId);
+          if (!volunteer) {
+            return sendError(404, 'Volunteer not found');
+          }
+
+          const salt = crypto.randomBytes(16).toString('hex');
+          const passwordHash = crypto.scryptSync(newPassword, salt, 64).toString('hex');
+          volunteer.salt = salt;
+          volunteer.passwordHash = passwordHash;
+          saveDb(db);
+
+          if (adminAuth && volunteer.uid) {
+            try {
+              await adminAuth.updateUser(volunteer.uid, { password: newPassword });
+            } catch {}
+          }
+
+          sendJson(200, {
+            success: true,
+            message: `Password reset successfully for volunteer ${sanitizedId}`
+          });
         } catch (err) {
           sendError(err.status || 401, err.message || 'Unauthorized');
         }

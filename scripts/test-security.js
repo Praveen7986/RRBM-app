@@ -1,15 +1,26 @@
 // scripts/test-security.js
-// Automated Security Test Suite for RRBM Fasting Prayers 2026 App
+// Comprehensive Automated Security Test Suite for RRBM Fasting Prayers 2026 App
 // Validates:
-// 1. Fail-secure ADMIN_SECRET & rate-limiting against brute force
-// 2. Token verification & authorization on privileged endpoints
-// 3. Protected volunteer account provisioning
-// 4. Firestore security rules structure, schema enforcement & anti-impersonation
+// 1. Cloud Firestore security rules structure, schema enforcement & anti-impersonation
+// 2. Admin authentication fail-secure behavior & brute-force rate-limiting
+// 3. Complete Volunteer Credential Validation:
+//    - Deprecation of unauthenticated self-registration (403)
+//    - Cryptographic scrypt password hashing (no plaintext, 128-hex-char hash, 32-hex-char salt)
+//    - Valid credentials login (200)
+//    - Invalid password rejection (401)
+//    - Non-existent Volunteer ID rejection (401)
+//    - Unprovisioned account rejection (401)
+//    - Account deactivation enforcement (403)
+//    - Account reactivation validation (200)
+//    - Secure Admin password reset flow (old rejected 401, new accepted 200)
+//    - Multi-volunteer account isolation and independence
+//    - Admin-only access restriction on provisioning and management endpoints
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import { spawn } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,10 +42,45 @@ const ADMIN_SECRET = process.env.ADMIN_SECRET || 'RRBM_Festival_Admin_2026_Secur
 const PORT = 3000;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
+let spawnedServerProcess = null;
+
+async function ensureServerRunning() {
+  try {
+    const res = await fetch(`${BASE_URL}/api/health`);
+    if (res.ok) {
+      console.log('  Connected to existing active server on port 3000.\n');
+      return;
+    }
+  } catch {}
+
+  console.log('  Spawning local backend server for automated security testing...');
+  const serverPath = path.join(ROOT_DIR, 'server', 'server.js');
+  spawnedServerProcess = spawn('node', [serverPath], {
+    cwd: ROOT_DIR,
+    env: { ...process.env, PORT: String(PORT) },
+    stdio: 'ignore'
+  });
+
+  // Wait for server to become responsive
+  const start = Date.now();
+  while (Date.now() - start < 15000) {
+    try {
+      const res = await fetch(`${BASE_URL}/api/health`);
+      if (res.ok) {
+        console.log('  Backend test server is up and responsive!\n');
+        return;
+      }
+    } catch {}
+    await new Promise(r => setTimeout(r, 400));
+  }
+
+  throw new Error('Backend test server failed to start within timeout.');
+}
+
 async function runSecurityTests() {
-  console.log('========================================================');
-  console.log('🛡️  RRBM FASTING PRAYERS 2026 - SECURITY TEST SUITE');
-  console.log('========================================================\n');
+  console.log('================================================================');
+  console.log('🛡️  RRBM FASTING PRAYERS 2026 - COMPREHENSIVE SECURITY TEST SUITE');
+  console.log('================================================================\n');
 
   let passed = 0;
   let total = 0;
@@ -126,70 +172,298 @@ async function runSecurityTests() {
   console.log('  All static Firestore rules assertions passed!\n');
 
   // ---------------------------------------------------------
-  // SECTION 2: BACKEND ENDPOINT SECURITY
+  // SECTION 2: BACKEND ENDPOINT & CREDENTIAL AUTHENTICATION
   // ---------------------------------------------------------
-  console.log('▶ [Section 2] Verifying Backend Server Endpoints...');
+  console.log('▶ [Section 2] Verifying Backend Server Endpoints & Credential Validation...');
+  await ensureServerRunning();
 
-  // Check if server is running; if not, report warning or proceed
-  let serverLive = false;
-  try {
-    const health = await fetch(`${BASE_URL}/api/health`);
-    if (health.ok) serverLive = true;
-  } catch {}
+  // 2.1 Legacy Self-Registration Rejection
+  console.log('  Testing legacy self-registration endpoint rejection...');
+  const selfRegRes = await fetch(`${BASE_URL}/api/volunteers/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'Unprovisioned Hacker' })
+  });
+  assert(selfRegRes.status === 403, 'POST /api/volunteers/register is disabled and returns 403 Forbidden');
 
-  if (!serverLive) {
-    console.log('  ℹ️  Local server not currently listening on port 3000. Skipping live HTTP tests.');
-    console.log('     (Run `npm run server` to execute live HTTP endpoint tests)\n');
-  } else {
-    // 2.1 Admin Login: Invalid PIN rejection
-    console.log('  Testing admin login rejection with old PIN ("2026")...');
-    const badLoginRes = await fetch(`${BASE_URL}/api/admin/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin: '2026' })
-    });
-    assert(badLoginRes.status === 401, 'POST /api/admin/login rejects old "2026" PIN with 401 Unauthorized');
+  // 2.2 Admin Login: Invalid PIN rejection
+  console.log('  Testing admin login rejection with old PIN ("2026")...');
+  const badLoginRes = await fetch(`${BASE_URL}/api/admin/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: '2026' })
+  });
+  assert(badLoginRes.status === 401, 'POST /api/admin/login rejects old "2026" PIN with 401 Unauthorized');
 
-    // 2.2 Balance update without Bearer token
-    console.log('  Testing balance update rejection without ID token...');
-    const noAuthBal = await fetch(`${BASE_URL}/api/balance`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: 500000 })
-    });
-    assert(noAuthBal.status === 401, 'POST /api/balance rejects unauthorized write with 401 Unauthorized');
+  // 2.3 Privileged Endpoints Reject Unauthenticated Requests
+  console.log('  Testing privileged endpoints without authentication...');
+  const noAuthBal = await fetch(`${BASE_URL}/api/balance`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount: 500000 })
+  });
+  assert(noAuthBal.status === 401, 'POST /api/balance rejects unauthenticated write with 401 Unauthorized');
 
-    // 2.3 Volunteer provisioning without Bearer token
-    console.log('  Testing volunteer provisioning rejection without admin token...');
-    const noAuthProv = await fetch(`${BASE_URL}/api/admin/volunteers/create`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        volunteerId: 'RRBM999',
-        fullName: 'Unauthorized Provision Test',
-        initialPassword: 'Password123!'
-      })
-    });
-    assert(noAuthProv.status === 401, 'POST /api/admin/volunteers/create rejects unauthenticated request with 401 Unauthorized');
+  const noAuthProv = await fetch(`${BASE_URL}/api/admin/volunteers/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      volunteerId: 'RRBM999',
+      fullName: 'Unauthorized Provision Test',
+      initialPassword: 'Password123!'
+    })
+  });
+  assert(noAuthProv.status === 401, 'POST /api/admin/volunteers/create rejects unauthenticated request with 401 Unauthorized');
 
-    // 2.4 Admin Login with valid ADMIN_SECRET
-    console.log('  Testing admin login with configured ADMIN_SECRET...');
-    const goodLoginRes = await fetch(`${BASE_URL}/api/admin/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret: ADMIN_SECRET })
-    });
-    const goodLoginData = await goodLoginRes.json();
-    assert(goodLoginRes.status === 200 && goodLoginData.success === true, 'POST /api/admin/login succeeds with valid ADMIN_SECRET');
-    assert(typeof goodLoginData.token === 'string', 'Login returns session token');
-  }
+  // 2.4 Admin Login with valid ADMIN_SECRET
+  console.log('  Testing admin login with configured ADMIN_SECRET...');
+  const adminLoginRes = await fetch(`${BASE_URL}/api/admin/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret: ADMIN_SECRET })
+  });
+  const adminLoginData = await adminLoginRes.json();
+  assert(adminLoginRes.status === 200 && adminLoginData.success === true, 'POST /api/admin/login succeeds with valid ADMIN_SECRET');
+  const adminToken = adminLoginData.token;
+  assert(typeof adminToken === 'string' && adminToken.length > 20, 'Admin login returns cryptographically strong session token');
 
-  console.log('========================================================');
-  console.log(`🎉 ALL ${passed}/${total} SECURITY TESTS PASSED SUCCESSFULLY!`);
-  console.log('========================================================\n');
+  // 2.5 Admin Provisions Volunteer 1 (VOL_TEST_A)
+  console.log('  Testing Admin provisioning Volunteer 1 (VOL_TEST_A)...');
+  const testVolAId = 'TEST_VOL_A';
+  const testVolAPass = 'P@ssword_Alpha_2026!';
+  const provARes = await fetch(`${BASE_URL}/api/admin/volunteers/create`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${adminToken}`
+    },
+    body: JSON.stringify({
+      volunteerId: testVolAId,
+      fullName: 'Alpha Volunteer',
+      initialPassword: testVolAPass,
+      role: 'leader'
+    })
+  });
+  const provAData = await provARes.json();
+  assert(provARes.status === 201 && provAData.success === true, 'Admin successfully provisions volunteer account with 201 Created');
+
+  // 2.6 Verify Password Hash Security (Stored as scrypt hash, not plaintext)
+  console.log('  Verifying backend storage stores cryptographic scrypt hashes and salt, not plaintext...');
+  const dbPath = path.join(ROOT_DIR, 'server', 'data', 'db.json');
+  assert(fs.existsSync(dbPath), 'server/data/db.json exists');
+  const serverDb = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+  const storedVolA = serverDb.volunteers.find(v => v.id === testVolAId);
+  assert(storedVolA !== undefined, 'Volunteer record persisted in backend database');
+  assert(!('password' in storedVolA), 'Backend database NEVER contains plaintext "password" key');
+  assert(typeof storedVolA.passwordHash === 'string' && storedVolA.passwordHash.length === 128, 'Password stored as 64-byte scrypt hash (128 hex chars)');
+  assert(typeof storedVolA.salt === 'string' && storedVolA.salt.length === 32, 'Password salt stored as 16-byte random salt (32 hex chars)');
+
+  // 2.7 Volunteer Login: Missing parameters
+  console.log('  Testing volunteer login rejection with missing parameters...');
+  const missingRes = await fetch(`${BASE_URL}/api/volunteers/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ volunteerId: testVolAId })
+  });
+  assert(missingRes.status === 400, 'POST /api/volunteers/login rejects request missing password with 400 Bad Request');
+
+  // 2.8 Volunteer Login: Invalid Password
+  console.log('  Testing volunteer login rejection with incorrect password...');
+  const wrongPassRes = await fetch(`${BASE_URL}/api/volunteers/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      volunteerId: testVolAId,
+      password: 'WrongPassword123!'
+    })
+  });
+  assert(wrongPassRes.status === 401, 'POST /api/volunteers/login rejects wrong password with 401 Unauthorized');
+
+  // 2.9 Volunteer Login: Unknown / Non-existent ID
+  console.log('  Testing volunteer login rejection with unknown Volunteer ID...');
+  const unknownIdRes = await fetch(`${BASE_URL}/api/volunteers/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      volunteerId: 'NON_EXISTENT_ID_9999',
+      password: testVolAPass
+    })
+  });
+  assert(unknownIdRes.status === 401, 'POST /api/volunteers/login rejects unknown ID with 401 Unauthorized');
+
+  // 2.10 Volunteer Login: Unprovisioned Account (account without password hash)
+  console.log('  Testing volunteer login rejection with unprovisioned account (no password setup)...');
+  const unprovRes = await fetch(`${BASE_URL}/api/volunteers/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      volunteerId: '260',
+      password: 'AnyPassword123!'
+    })
+  });
+  assert(unprovRes.status === 401, 'POST /api/volunteers/login rejects unprovisioned account with 401 Unauthorized');
+
+  // 2.11 Volunteer Login: Valid Credentials Success
+  console.log('  Testing volunteer login success with valid credentials...');
+  const goodVolLoginRes = await fetch(`${BASE_URL}/api/volunteers/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      volunteerId: testVolAId,
+      password: testVolAPass
+    })
+  });
+  const goodVolLoginData = await goodVolLoginRes.json();
+  assert(goodVolLoginRes.status === 200 && goodVolLoginData.success === true, 'POST /api/volunteers/login succeeds with valid credentials (200 OK)');
+  assert(goodVolLoginData.volunteer && goodVolLoginData.volunteer.id === testVolAId, 'Login returns authenticated volunteer identity');
+  assert(!('passwordHash' in goodVolLoginData.volunteer) && !('salt' in goodVolLoginData.volunteer), 'Sanitized volunteer profile does not leak password hash or salt to client');
+  assert(typeof goodVolLoginData.token === 'string', 'Login returns session token');
+
+  // 2.12 Account Deactivation: Admin Deactivates Account
+  console.log('  Testing account deactivation by admin...');
+  const deactivateRes = await fetch(`${BASE_URL}/api/admin/volunteers/status`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${adminToken}`
+    },
+    body: JSON.stringify({
+      volunteerId: testVolAId,
+      active: false
+    })
+  });
+  assert(deactivateRes.status === 200, 'POST /api/admin/volunteers/status deactivates volunteer account');
+
+  // 2.13 Deactivated Account Rejection
+  console.log('  Testing login attempt on deactivated account...');
+  const deactLoginRes = await fetch(`${BASE_URL}/api/volunteers/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      volunteerId: testVolAId,
+      password: testVolAPass
+    })
+  });
+  const deactLoginData = await deactLoginRes.json();
+  assert(deactLoginRes.status === 403, 'POST /api/volunteers/login rejects deactivated account with 403 Forbidden');
+  assert(deactLoginData.error.includes('deactivated'), 'Login error clearly informs volunteer that account has been deactivated');
+
+  // 2.14 Account Reactivation: Admin Reactivates Account
+  console.log('  Testing account reactivation by admin...');
+  const reactivateRes = await fetch(`${BASE_URL}/api/admin/volunteers/status`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${adminToken}`
+    },
+    body: JSON.stringify({
+      volunteerId: testVolAId,
+      active: true
+    })
+  });
+  assert(reactivateRes.status === 200, 'POST /api/admin/volunteers/status reactivates volunteer account');
+
+  const reactLoginRes = await fetch(`${BASE_URL}/api/volunteers/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      volunteerId: testVolAId,
+      password: testVolAPass
+    })
+  });
+  assert(reactLoginRes.status === 200, 'Reactivated volunteer can successfully log in again');
+
+  // 2.15 Admin Resets Volunteer Password
+  console.log('  Testing admin password reset...');
+  const newVolAPass = 'NewP@ssword_Alpha_2026!';
+  const resetRes = await fetch(`${BASE_URL}/api/admin/volunteers/reset-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${adminToken}`
+    },
+    body: JSON.stringify({
+      volunteerId: testVolAId,
+      newPassword: newVolAPass
+    })
+  });
+  assert(resetRes.status === 200, 'POST /api/admin/volunteers/reset-password resets password successfully');
+
+  // Old password must fail
+  const oldPassRes = await fetch(`${BASE_URL}/api/volunteers/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      volunteerId: testVolAId,
+      password: testVolAPass
+    })
+  });
+  assert(oldPassRes.status === 401, 'Volunteer login with OLD password fails with 401 Unauthorized');
+
+  // New password must succeed
+  const newPassRes = await fetch(`${BASE_URL}/api/volunteers/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      volunteerId: testVolAId,
+      password: newVolAPass
+    })
+  });
+  assert(newPassRes.status === 200, 'Volunteer login with NEW reset password succeeds with 200 OK');
+
+  // 2.16 Multi-Volunteer Account Independence
+  console.log('  Testing multi-volunteer provisioning and account isolation...');
+  const testVolBId = 'TEST_VOL_B';
+  const testVolBPass = 'P@ssword_Bravo_2026!';
+  const provBRes = await fetch(`${BASE_URL}/api/admin/volunteers/create`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${adminToken}`
+    },
+    body: JSON.stringify({
+      volunteerId: testVolBId,
+      fullName: 'Bravo Volunteer',
+      initialPassword: testVolBPass,
+      role: 'volunteer'
+    })
+  });
+  assert(provBRes.status === 201, 'Admin successfully provisions Volunteer 2 (TEST_VOL_B)');
+
+  const volBLoginRes = await fetch(`${BASE_URL}/api/volunteers/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      volunteerId: testVolBId,
+      password: testVolBPass
+    })
+  });
+  assert(volBLoginRes.status === 200, 'Volunteer 2 logs in successfully with their own credentials');
+
+  // Cross-credential rejection
+  const crossLoginRes = await fetch(`${BASE_URL}/api/volunteers/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      volunteerId: testVolBId,
+      password: newVolAPass // Volunteer A's password
+    })
+  });
+  assert(crossLoginRes.status === 401, 'Volunteer 2 cannot log in using Volunteer 1\'s password (cross-credential isolation)');
+
+  console.log('\n================================================================');
+  console.log(`🎉 ALL ${passed}/${total} SECURITY & AUTHENTICATION TESTS PASSED SUCCESSFULLY!`);
+  console.log('================================================================\n');
 }
 
-runSecurityTests().catch(err => {
-  console.error('\n❌ Security Test Suite Failure:', err);
-  process.exit(1);
-});
+runSecurityTests()
+  .catch(err => {
+    console.error('\n❌ Security Test Suite Failure:', err);
+    process.exit(1);
+  })
+  .finally(() => {
+    if (spawnedServerProcess) {
+      console.log('  Stopping spawned test server process...');
+      spawnedServerProcess.kill();
+    }
+  });

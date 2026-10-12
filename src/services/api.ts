@@ -85,7 +85,15 @@ async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T>
 }
 
 export const apiClient = {
-  // 1. Volunteer Registration (Centralized auto-increment ID from backend)
+  // 1. Volunteer Login with ID and Password
+  async loginVolunteer(volunteerId: string, password: string): Promise<{ success: boolean; volunteer: Volunteer; token: string; customToken?: string | null }> {
+    return fetchJson<{ success: boolean; volunteer: Volunteer; token: string; customToken?: string | null }>('/api/volunteers/login', {
+      method: 'POST',
+      body: JSON.stringify({ volunteerId, password })
+    });
+  },
+
+  // 1b. Legacy Check-In (Deprecated)
   async registerVolunteer(name: string): Promise<{ success: boolean; volunteer: Volunteer; reused?: boolean }> {
     return fetchJson<{ success: boolean; volunteer: Volunteer; reused?: boolean }>('/api/volunteers/register', {
       method: 'POST',
@@ -194,6 +202,28 @@ export const apiClient = {
         'Authorization': `Bearer ${adminIdToken}`
       },
       body: JSON.stringify(params)
+    });
+  },
+
+  // 10c. Update Volunteer Status (Active / Inactive)
+  async updateVolunteerStatus(volunteerId: string, active: boolean, adminIdToken: string): Promise<{ success: boolean; volunteerId: string; active: boolean }> {
+    return fetchJson<{ success: boolean; volunteerId: string; active: boolean }>('/api/admin/volunteers/status', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${adminIdToken}`
+      },
+      body: JSON.stringify({ volunteerId, active })
+    });
+  },
+
+  // 10d. Reset Volunteer Password (Admin Only)
+  async resetVolunteerPassword(volunteerId: string, newPassword: string, adminIdToken: string): Promise<{ success: boolean; message: string }> {
+    return fetchJson<{ success: boolean; message: string }>('/api/admin/volunteers/reset-password', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${adminIdToken}`
+      },
+      body: JSON.stringify({ volunteerId, newPassword })
     });
   },
 

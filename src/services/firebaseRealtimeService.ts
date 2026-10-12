@@ -129,48 +129,29 @@ export class FirebaseRealtimeService {
       const volunteerRef = doc(db, 'volunteers', trimmedId);
       const volunteerSnap = await getDoc(volunteerRef);
 
-      let volunteer: Volunteer;
-
-      if (volunteerSnap.exists()) {
-        const data = volunteerSnap.data();
-        if (data.active === false) {
-          await signOut(auth);
-          throw new Error('This volunteer account has been deactivated. Please contact your coordinator.');
-        }
-
-        volunteer = {
-          id: trimmedId,
-          name: data.name || `Volunteer ${trimmedId}`,
-          registeredAt: data.createdAt?.toDate?.()?.toISOString() || data.registeredAt || new Date().toISOString(),
-          active: true,
-          role: data.role || 'volunteer'
-        };
-
-        // Update heartbeat / last active and bind Firebase Auth UID
-        await setDoc(volunteerRef, {
-          lastActive: serverTimestamp(),
-          uid: userCredential.user.uid
-        }, { merge: true });
-      } else {
-        // Fallback profile if Firestore document is pending creation
-        volunteer = {
-          id: trimmedId,
-          name: userCredential.user.displayName || `Volunteer ${trimmedId}`,
-          registeredAt: new Date().toISOString(),
-          active: true,
-          role: 'volunteer'
-        };
-        try {
-          await setDoc(volunteerRef, {
-            ...volunteer,
-            uid: userCredential.user.uid,
-            createdAt: serverTimestamp(),
-            lastActive: serverTimestamp()
-          }, { merge: true });
-        } catch {
-          // If Firestore security rules restrict self-creation, continue with local volunteer object
-        }
+      if (!volunteerSnap.exists()) {
+        await signOut(auth);
+        throw new Error('Volunteer account not provisioned. Please contact your coordinator.');
       }
+
+      const data = volunteerSnap.data();
+      if (data.active === false) {
+        await signOut(auth);
+        throw new Error('This volunteer account has been deactivated. Please contact your coordinator.');
+      }
+
+      const volunteer: Volunteer = {
+        id: trimmedId,
+        name: data.name || `Volunteer ${trimmedId}`,
+        registeredAt: data.createdAt?.toDate?.()?.toISOString() || data.registeredAt || new Date().toISOString(),
+        active: true,
+        role: data.role || 'volunteer'
+      };
+
+      // Update heartbeat / last active (strict schema: only lastActive is modified)
+      await setDoc(volunteerRef, {
+        lastActive: serverTimestamp()
+      }, { merge: true });
 
       this.currentVolunteer = volunteer;
       return volunteer;

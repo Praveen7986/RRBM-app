@@ -5,7 +5,8 @@ import { Volunteer, AlertEvent, ChatMessage, OfferingBalance, ConnectionStatus }
 import { triggerAlertSoundAndVibration, triggerChatNotification } from './audioNotification';
 import { apiClient, getServerBaseUrl, setCustomServerUrl } from './api';
 import { firebaseRealtime } from './firebaseRealtimeService';
-import { isFirebaseConfigured } from '../config/firebase';
+import { isFirebaseConfigured, getFirebaseServices } from '../config/firebase';
+import { signInWithCustomToken } from 'firebase/auth';
 
 const STORAGE_KEYS = {
   CURRENT_VOLUNTEER: 'rrbm_volunteer_user_2026',
@@ -451,30 +452,46 @@ class RealtimeStoreService {
   // 1. Volunteer Sign-In with Volunteer ID & Password
   public async signInVolunteer(volunteerId: string, password?: string): Promise<Volunteer> {
     const trimmedId = volunteerId.trim();
+    if (!trimmedId) {
+      throw new Error('Please enter your Volunteer ID.');
+    }
+    const cleanPassword = (password || '').trim();
+    if (!cleanPassword) {
+      throw new Error('Please enter your password.');
+    }
 
     // Cloud Mode via Firebase Authentication
-    if (this.isCloudFirebaseMode && password) {
-      const vol = await firebaseRealtime.signInVolunteer(trimmedId, password);
+    if (this.isCloudFirebaseMode) {
+      const vol = await firebaseRealtime.signInVolunteer(trimmedId, cleanPassword);
       this.currentVolunteer = vol;
       localStorage.setItem(STORAGE_KEYS.CURRENT_VOLUNTEER, JSON.stringify(vol));
       this.notify();
       return vol;
     }
 
-    // Node Server Fallback
+    // Node Server Authentication
     try {
-      const res = await apiClient.registerVolunteer(trimmedId);
+      const res = await apiClient.loginVolunteer(trimmedId, cleanPassword);
       if (res.success && res.volunteer) {
+        if (res.customToken) {
+          const { auth } = getFirebaseServices();
+          if (auth) {
+            try {
+              await signInWithCustomToken(auth, res.customToken);
+            } catch (authErr) {
+              console.warn('[RealtimeStore] Custom token sign-in notice:', authErr);
+            }
+          }
+        }
         this.currentVolunteer = res.volunteer;
         localStorage.setItem(STORAGE_KEYS.CURRENT_VOLUNTEER, JSON.stringify(res.volunteer));
         this.notify();
         return res.volunteer;
       }
+      throw new Error('Server returned invalid volunteer response.');
     } catch (err: any) {
-      throw new Error(`Failed to sign in: ${err.message}. Check your credentials or internet connection.`);
+      throw new Error(err.message || 'Failed to sign in. Check your credentials or internet connection.');
     }
-
-    throw new Error('Server returned invalid volunteer response.');
   }
 
   public async signOutVolunteer() {
