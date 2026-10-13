@@ -287,7 +287,12 @@ const DEFAULT_DB = {
     amount: 148500,
     updatedBy: 'Festival Coordination Desk',
     updatedAt: new Date().toISOString()
-  }
+  },
+  expenditures: [
+    { id: 'EXP_1', date: '2026-10-20', purpose: 'Sound & Tent arrangement', amount: 25000, createdAt: '2026-10-20T10:00:00.000Z' },
+    { id: 'EXP_2', date: '2026-10-21', purpose: 'Food & Refreshments for volunteers', amount: 18500, createdAt: '2026-10-21T12:30:00.000Z' },
+    { id: 'EXP_3', date: '2026-10-22', purpose: 'Stage lighting and flower decoration', amount: 12000, createdAt: '2026-10-22T08:00:00.000Z' }
+  ]
 };
 
 const DEFAULT_MANIFEST = {
@@ -330,6 +335,11 @@ function loadDb() {
       existing.passwordHash = seed.passwordHash;
       existing.role = existing.role || seed.role;
     }
+  }
+
+  // Ensure expenditures array exists
+  if (!Array.isArray(loaded.expenditures)) {
+    loaded.expenditures = DEFAULT_DB.expenditures;
   }
 
   return loaded;
@@ -900,6 +910,66 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    // 14b. Spent Money (Expenditures) API (GET)
+    if (pathname === '/api/spent' && req.method === 'GET') {
+      sendJson(200, { success: true, expenditures: db.expenditures || [] });
+      return;
+    }
+
+    // 14c. Add Spent Money (POST)
+    if (pathname === '/api/spent' && req.method === 'POST') {
+      (async () => {
+        try {
+          await verifyAdminToken(req);
+          const body = await parseJsonBody();
+          const amount = Number(body.amount);
+          const purpose = String(body.purpose || '').trim();
+          const date = String(body.date || '').trim() || new Date().toISOString().split('T')[0];
+
+          if (isNaN(amount) || amount <= 0) return sendError(400, 'Valid spent amount required');
+          if (!purpose) return sendError(400, 'Purpose of expenditure is required');
+
+          if (!Array.isArray(db.expenditures)) db.expenditures = [];
+
+          const newExp = {
+            id: `EXP_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            date,
+            purpose,
+            amount,
+            createdAt: new Date().toISOString()
+          };
+
+          db.expenditures.unshift(newExp);
+          saveDb(db);
+
+          broadcast('EXPENDITURES_UPDATED', db.expenditures);
+          sendJson(201, { success: true, expenditure: newExp, expenditures: db.expenditures });
+        } catch (err) {
+          sendError(err.status || 401, err.message || 'Unauthorized');
+        }
+      })();
+      return;
+    }
+
+    // 14d. Delete Spent Money (DELETE)
+    if (pathname.startsWith('/api/spent/') && req.method === 'DELETE') {
+      (async () => {
+        try {
+          await verifyAdminToken(req);
+          const expId = pathname.replace('/api/spent/', '').trim();
+          if (!Array.isArray(db.expenditures)) db.expenditures = [];
+          db.expenditures = db.expenditures.filter(e => e.id !== expId);
+          saveDb(db);
+
+          broadcast('EXPENDITURES_UPDATED', db.expenditures);
+          sendJson(200, { success: true, expenditures: db.expenditures });
+        } catch (err) {
+          sendError(err.status || 401, err.message || 'Unauthorized');
+        }
+      })();
+      return;
+    }
+
     // 15. Manager Login (POST)
     if (pathname === '/api/admin/login' && req.method === 'POST') {
       (async () => {
@@ -1082,6 +1152,49 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    // 16b2. Admin Volunteer Name Update (POST)
+    if (pathname === '/api/admin/volunteers/update-name' && req.method === 'POST') {
+      (async () => {
+        try {
+          await verifyAdminToken(req);
+          const body = await parseJsonBody();
+          const { volunteerId, name } = body;
+          const sanitizedId = String(volunteerId || '').trim().toUpperCase();
+          const newName = String(name || '').trim();
+
+          if (!sanitizedId || !newName) {
+            return sendError(400, 'Volunteer ID and updated Name are required');
+          }
+
+          const volunteer = db.volunteers.find(v => String(v.id).toUpperCase() === sanitizedId);
+          if (!volunteer) {
+            return sendError(404, 'Volunteer not found');
+          }
+
+          volunteer.name = newName;
+          saveDb(db);
+
+          if (adminDb) {
+            try {
+              await adminDb.collection('volunteers').doc(sanitizedId).set({
+                name: newName,
+                lastUpdated: FieldValue.serverTimestamp()
+              }, { merge: true });
+            } catch (fErr) {
+              console.warn('[AdminUpdateName] Firestore sync notice:', fErr.message);
+            }
+          }
+
+          broadcast('VOLUNTEER_NAME_UPDATED', { id: sanitizedId, name: newName });
+          console.log(`[AdminUpdateName] Volunteer ${sanitizedId} name updated to "${newName}"`);
+          sendJson(200, { success: true, volunteer });
+        } catch (err) {
+          sendError(err.status || 401, err.message || 'Unauthorized');
+        }
+      })();
+      return;
+    }
+
     // 16c. Admin Volunteer Status Toggle (POST)
     if (pathname === '/api/admin/volunteers/status' && req.method === 'POST') {
       (async () => {
@@ -1223,6 +1336,7 @@ wss.on('connection', (ws) => {
       activeAlert: db.activeAlert,
       chatMessages: db.chatMessages.slice(-50),
       offeringBalance: db.offeringBalance,
+      expenditures: db.expenditures || [],
       volunteerCount: db.volunteers.length
     },
     timestamp: Date.now()

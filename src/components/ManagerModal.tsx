@@ -1,6 +1,6 @@
 // src/components/ManagerModal.tsx
 // Authenticated Manager / Admin Portal for Festival Coordinators & Ministry Pastors
-// Includes Offering Balance, Alert Control, Volunteer Roster, Broadcast Siren & APK Release Manager
+// Includes Offering Balance, Spent Money (Expenditures), and Volunteer Roster with Name Editing
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -8,33 +8,25 @@ import {
   Lock, 
   IndianRupee, 
   Users, 
-  Bell, 
   CheckCircle2, 
-  Clock, 
-  XCircle, 
-  Activity, 
   LogOut, 
   X, 
   ArrowRight, 
   RefreshCw,
   AlertTriangle,
-  Send,
-  Download,
-  Cpu,
-  FileCode,
   UserPlus,
   Eye,
   EyeOff,
-  UserCheck,
-  UserX
+  Receipt,
+  Calendar,
+  Edit3,
+  Trash2,
+  Check
 } from 'lucide-react';
 import { apiClient } from '../services/api';
 import { realtimeStore } from '../services/realtimeStore';
 import { firebaseRealtime } from '../services/firebaseRealtimeService';
-import { appUpdateManager } from '../services/appUpdateManager';
-import { Volunteer, AlertEvent } from '../types/volunteer';
-import { APP_VERSION } from '../config/appVersion';
-import { UpdateManifest } from '../types/update';
+import { Volunteer, Expenditure } from '../types/volunteer';
 import { signInWithCustomToken, signOut } from 'firebase/auth';
 import { getFirebaseServices } from '../config/firebase';
 
@@ -50,20 +42,30 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
   const [authError, setAuthError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Manager dashboard state
-  const [activeTab, setActiveTab] = useState<'balance' | 'alerts' | 'volunteers' | 'broadcast' | 'updates'>('balance');
+  // Active Tab: Offering | Spent | Roster
+  const [activeTab, setActiveTab] = useState<'balance' | 'spent' | 'volunteers'>('balance');
+
+  // Offering Balance State
   const [newBalanceInput, setNewBalanceInput] = useState('');
   const [balanceUpdateSuccess, setBalanceUpdateSuccess] = useState(false);
+
+  // Spent Money State
+  const [spentDate, setSpentDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [spentPurpose, setSpentPurpose] = useState('');
+  const [spentAmount, setSpentAmount] = useState('');
+  const [isSavingSpent, setIsSavingSpent] = useState(false);
+  const [spentSuccess, setSpentSuccess] = useState<string | null>(null);
+  const [spentError, setSpentError] = useState<string | null>(null);
+  const [expendituresList, setExpendituresList] = useState<Expenditure[]>(() => realtimeStore.getExpenditures());
+
+  // Volunteer Roster State
   const [volunteersList, setVolunteersList] = useState<Volunteer[]>([]);
-  const [alertHistory, setAlertHistory] = useState<AlertEvent[]>([]);
-  const [broadcastMessage, setBroadcastMessage] = useState('');
-  const [broadcastSent, setBroadcastSent] = useState(false);
+  const [editingVolId, setEditingVolId] = useState<string | null>(null);
+  const [editingVolName, setEditingVolName] = useState('');
+  const [isUpdatingName, setIsUpdatingName] = useState(false);
+  const [nameUpdateSuccess, setNameUpdateSuccess] = useState<string | null>(null);
 
-  // APK Update Manager State
-  const [serverManifest, setServerManifest] = useState<UpdateManifest | null>(null);
-  const [manifestEditSuccess, setManifestEditSuccess] = useState(false);
-
-  // Volunteer Account Provisioning State
+  // Volunteer Provisioning State
   const [newVolId, setNewVolId] = useState('');
   const [newVolName, setNewVolName] = useState('');
   const [newVolPassword, setNewVolPassword] = useState('');
@@ -72,7 +74,6 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
   const [createVolError, setCreateVolError] = useState<string | null>(null);
   const [isCreatingVol, setIsCreatingVol] = useState(false);
 
-  const activeAlert = realtimeStore.getActiveAlert();
   const offeringBalance = realtimeStore.getOfferingBalance();
 
   useEffect(() => {
@@ -80,6 +81,13 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
       loadAdminData();
     }
   }, [isOpen, isAuthenticated]);
+
+  useEffect(() => {
+    const unsub = realtimeStore.subscribe(() => {
+      setExpendituresList(realtimeStore.getExpenditures());
+    });
+    return unsub;
+  }, []);
 
   const loadAdminData = async () => {
     setIsLoading(true);
@@ -91,20 +99,16 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
         }
       }
 
-      const [volRes, alertRes, manifestRes] = await Promise.allSettled([
+      const [volRes, expRes] = await Promise.allSettled([
         apiClient.getVolunteers(),
-        apiClient.getAlertHistory(),
-        fetch(`${APP_VERSION.updateManifestUrl}?_t=${Date.now()}`).then(r => r.json())
+        apiClient.getExpenditures()
       ]);
 
       if (volRes.status === 'fulfilled' && volRes.value.success && !realtimeStore.isUsingCloud()) {
         setVolunteersList(volRes.value.volunteers);
       }
-      if (alertRes.status === 'fulfilled' && alertRes.value.success) {
-        setAlertHistory(alertRes.value.alerts);
-      }
-      if (manifestRes.status === 'fulfilled' && manifestRes.value) {
-        setServerManifest(manifestRes.value as UpdateManifest);
+      if (expRes.status === 'fulfilled' && expRes.value.success && expRes.value.expenditures) {
+        setExpendituresList(expRes.value.expenditures);
       }
     } catch {
       // ignore
@@ -113,93 +117,34 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
     }
   };
 
-  const handleCreateVolunteer = async (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const id = newVolId.trim();
-    const name = newVolName.trim();
-    const pwd = newVolPassword.trim();
-
-    if (!id || !name || !pwd) {
-      setCreateVolError('Volunteer ID, Name, and Password are all required.');
+    const cleanPin = pinInput.trim();
+    if (!cleanPin) {
+      setAuthError('Please enter the Admin Secret Key.');
       return;
     }
-    if (pwd.length < 6) {
-      setCreateVolError('Password must be at least 6 characters.');
-      return;
-    }
-
-    setIsCreatingVol(true);
-    setCreateVolError(null);
-    setCreateVolSuccess(null);
-
-    try {
-      const { auth } = getFirebaseServices();
-      let token = adminToken;
-      if (auth?.currentUser) {
-        token = await auth.currentUser.getIdToken();
-      }
-
-      if (token) {
-        const res = await apiClient.createVolunteerAccount({
-          volunteerId: id,
-          fullName: name,
-          initialPassword: pwd
-        }, token);
-        setCreateVolSuccess(`Volunteer "${name}" (ID: ${res.volunteer.volunteerId}) provisioned successfully!`);
-        setNewVolId('');
-        setNewVolName('');
-        setNewVolPassword('');
-        if (realtimeStore.isUsingCloud()) {
-          const updated = await firebaseRealtime.fetchVolunteersList();
-          setVolunteersList(updated);
-        } else {
-          loadAdminData();
-        }
-      } else {
-        const res = await apiClient.registerVolunteer(name);
-        if (res.success) {
-          setCreateVolSuccess(`Volunteer ${name} registered on server (ID: ${res.volunteer.id}).`);
-          setNewVolId('');
-          setNewVolName('');
-          setNewVolPassword('');
-          loadAdminData();
-        }
-      }
-    } catch (err: any) {
-      setCreateVolError(err.message || 'Failed to create volunteer account.');
-    } finally {
-      setIsCreatingVol(false);
-    }
-  };
-
-  const handleToggleVolunteerStatus = async (vol: Volunteer) => {
-    if (!realtimeStore.isUsingCloud()) return;
-    try {
-      const nextState = !vol.active;
-      await firebaseRealtime.toggleVolunteerActive(vol.id, nextState);
-      setVolunteersList(prev => prev.map(v => v.id === vol.id ? { ...v, active: nextState } : v));
-    } catch (err: any) {
-      console.warn('Failed to toggle volunteer status:', err);
-    }
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const secret = pinInput.trim().replace(/^['"](.*)['"]$/, '$1').trim();
-    if (!secret) return;
 
     setIsLoading(true);
     setAuthError('');
 
     try {
-      const res = await apiClient.adminLogin(secret);
+      const res = await apiClient.adminLogin(cleanPin);
       if (res.success) {
-        let currentToken = res.token;
+        let currentToken = cleanPin;
+        if (res.token) {
+          currentToken = res.token;
+        }
+
         if (res.customToken) {
           const { auth } = getFirebaseServices();
           if (auth) {
-            const userCred = await signInWithCustomToken(auth, res.customToken);
-            currentToken = await userCred.user.getIdToken();
+            try {
+              const userCred = await signInWithCustomToken(auth, res.customToken);
+              currentToken = await userCred.user.getIdToken();
+            } catch (err) {
+              console.warn('Firebase custom token notice:', err);
+            }
           }
         }
         setAdminToken(currentToken);
@@ -243,36 +188,141 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
     }
   };
 
-  const handleResolveAlert = async (alertId: string) => {
-    if (!confirm('Mark this alert as resolved and clear active alert state?')) return;
-    setIsLoading(true);
-    try {
-      await realtimeStore.resolveAlert(alertId);
-      loadAdminData();
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSendAdminBroadcast = async (e: React.FormEvent) => {
+  // 2. Spent Money (Add Expenditure)
+  const handleSaveSpent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!broadcastMessage.trim()) return;
+    const amountNum = parseFloat(spentAmount.replace(/,/g, ''));
+    const purpose = spentPurpose.trim();
+    const date = spentDate.trim() || new Date().toISOString().split('T')[0];
 
-    setIsLoading(true);
+    if (!purpose) {
+      setSpentError('Please enter the purpose of this expenditure.');
+      return;
+    }
+    if (isNaN(amountNum) || amountNum <= 0) {
+      setSpentError('Please enter a valid spent amount in Rupees.');
+      return;
+    }
+
+    setIsSavingSpent(true);
+    setSpentError(null);
+    setSpentSuccess(null);
+
     try {
-      await realtimeStore.triggerImmediateAlert(`📢 MANAGER BROADCAST: ${broadcastMessage.trim()}`);
-      setBroadcastMessage('');
-      setBroadcastSent(true);
-      setTimeout(() => setBroadcastSent(false), 3000);
-      loadAdminData();
+      const { auth } = getFirebaseServices();
+      let token = adminToken;
+      if (auth?.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      }
+
+      const updated = await realtimeStore.addExpenditure(date, purpose, amountNum, token);
+      setExpendituresList(updated);
+      setSpentPurpose('');
+      setSpentAmount('');
+      setSpentSuccess(`Saved ₹${amountNum.toLocaleString('en-IN')} for "${purpose}"! Updated on Blessings page.`);
+      setTimeout(() => setSpentSuccess(null), 4000);
+    } catch (err: any) {
+      setSpentError(err.message || 'Failed to save expenditure');
     } finally {
-      setIsLoading(false);
+      setIsSavingSpent(false);
     }
   };
 
-  const handleTriggerClientUpdateCheck = () => {
-    onClose();
-    appUpdateManager.checkForUpdates(true);
+  const handleDeleteSpent = async (id: string, purpose: string) => {
+    if (!confirm(`Are you sure you want to delete expenditure "${purpose}"?`)) return;
+
+    try {
+      const { auth } = getFirebaseServices();
+      let token = adminToken;
+      if (auth?.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      }
+
+      const updated = await realtimeStore.deleteExpenditure(id, token);
+      setExpendituresList(updated);
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete expenditure');
+    }
+  };
+
+  // 3. Edit Volunteer Name
+  const handleStartEditName = (vol: Volunteer) => {
+    setEditingVolId(vol.id);
+    setEditingVolName(vol.name);
+    setNameUpdateSuccess(null);
+  };
+
+  const handleSaveVolunteerName = async (volunteerId: string) => {
+    const trimmed = editingVolName.trim();
+    if (!trimmed) {
+      alert('Volunteer name cannot be empty');
+      return;
+    }
+
+    setIsUpdatingName(true);
+    try {
+      const { auth } = getFirebaseServices();
+      let token = adminToken;
+      if (auth?.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      }
+
+      await realtimeStore.updateVolunteerName(volunteerId, trimmed, token);
+      setVolunteersList(prev => prev.map(v => v.id === volunteerId ? { ...v, name: trimmed } : v));
+      setEditingVolId(null);
+      setNameUpdateSuccess(`Name updated to "${trimmed}"`);
+      setTimeout(() => setNameUpdateSuccess(null), 3000);
+    } catch (err: any) {
+      alert(err.message || 'Failed to update volunteer name');
+    } finally {
+      setIsUpdatingName(false);
+    }
+  };
+
+  // 4. Provision Volunteer Account
+  const handleCreateVolunteer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = newVolId.trim();
+    const name = newVolName.trim();
+    const pwd = newVolPassword.trim();
+
+    if (!id || !name || !pwd) {
+      setCreateVolError('Volunteer ID, Name, and Password are all required.');
+      return;
+    }
+    if (pwd.length < 6) {
+      setCreateVolError('Password must be at least 6 characters.');
+      return;
+    }
+
+    setIsCreatingVol(true);
+    setCreateVolError(null);
+    setCreateVolSuccess(null);
+
+    try {
+      const { auth } = getFirebaseServices();
+      let token = adminToken;
+      if (auth?.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      }
+
+      if (token) {
+        const res = await apiClient.createVolunteerAccount({
+          volunteerId: id,
+          fullName: name,
+          initialPassword: pwd
+        }, token);
+        setCreateVolSuccess(`Volunteer "${name}" (ID: ${res.volunteer.volunteerId}) registered successfully!`);
+        setNewVolId('');
+        setNewVolName('');
+        setNewVolPassword('');
+        loadAdminData();
+      }
+    } catch (err: any) {
+      setCreateVolError(err.message || 'Failed to create volunteer account.');
+    } finally {
+      setIsCreatingVol(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -292,19 +342,19 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 select-none" style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)' }}>
-      <div className="manager-modal-box">
+      <div className="manager-modal-box max-w-lg w-full bg-[#0a101f] border border-sky-500/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="p-4 bg-[#101c36] border-b border-sky-500/20 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
               <ShieldCheck size={18} />
             </div>
             <div className="text-left">
               <h3 className="text-sm font-black text-white uppercase tracking-wider">
-                Manager Desk & Control
+                Management Desk
               </h3>
               <p className="text-[10px] text-sky-300 font-bold">
-                RRBM 3-Day Fasting 2026 Admin
+                Festival Administration & Records
               </p>
             </div>
           </div>
@@ -344,119 +394,90 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                   Manager Verification
                 </h4>
                 <p className="text-xs text-slate-400 max-w-xs mt-1">
-                  Enter authorized Secret Key to update live financial offerings, control alerts, and manage APK releases.
+                  Enter authorized Secret Key to manage offering balance, record expenditures, and manage volunteer roster.
                 </p>
               </div>
 
-              <form onSubmit={handleLogin} className="w-full space-y-3 max-w-xs">
-                <div>
-                  <input
-                    type="password"
-                    maxLength={128}
-                    placeholder="Enter Secret Key"
-                    value={pinInput}
-                    onChange={(e) => setPinInput(e.target.value)}
-                    className="w-full text-center tracking-widest text-base font-mono font-bold py-3 px-4 rounded-2xl bg-[#101c36] border border-sky-500/40 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
-                    autoFocus
-                  />
-                </div>
+              <form onSubmit={handleAdminLogin} className="w-full max-w-xs space-y-3">
+                <input
+                  type="password"
+                  placeholder="Enter Admin Secret Key"
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  className="w-full py-2.5 px-3 rounded-2xl bg-[#0c152a] border border-sky-500/30 text-sm text-center text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 font-mono tracking-wider"
+                  autoFocus
+                />
 
                 {authError && (
-                  <p className="text-xs font-bold text-rose-400 flex items-center justify-center gap-1">
-                    <AlertTriangle size={13} />
-                    <span>{authError}</span>
+                  <p className="text-xs text-rose-400 font-semibold leading-relaxed bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
+                    {authError}
                   </p>
                 )}
 
                 <button
                   type="submit"
-                  disabled={isLoading}
-                  className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black text-xs tracking-wider uppercase shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                  disabled={isLoading || !pinInput.trim()}
+                  className="w-full py-2.5 rounded-2xl bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 disabled:opacity-40 text-slate-950 font-black text-xs uppercase tracking-wider transition-all active:scale-98 cursor-pointer shadow-lg shadow-sky-500/20 flex items-center justify-center gap-1.5"
                 >
-                  {isLoading ? <RefreshCw size={15} className="animate-spin" /> : <span>UNLOCK MANAGER DESK</span>}
-                  {!isLoading && <ArrowRight size={15} />}
+                  {isLoading ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <>
+                      <span>AUTHENTICATE DESK</span>
+                      <ArrowRight size={13} />
+                    </>
+                  )}
                 </button>
               </form>
-
-              <span className="text-[10px] text-slate-500 font-mono">
-                Production Protection &bull; Event Year 2026
-              </span>
             </div>
           ) : (
             /* Manager Dashboard Tabs */
             <div className="space-y-3">
-              {/* Tab Selector */}
-              <div className="grid grid-cols-5 gap-1 p-1 rounded-2xl bg-[#101c36] border border-sky-500/20 text-[10px] font-black">
+              {/* 3 Streamlined Tabs: Offering | Spent | Roster */}
+              <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-[#101c36] border border-sky-500/20 text-xs font-black">
                 <button
                   type="button"
                   onClick={() => setActiveTab('balance')}
-                  className={`py-2 px-1 rounded-xl transition-all flex flex-col items-center gap-0.5 cursor-pointer ${
+                  className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                     activeTab === 'balance'
-                      ? 'bg-sky-500 text-slate-950 shadow-md'
+                      ? 'bg-sky-500 text-slate-950 shadow-md font-bold'
                       : 'text-slate-300 hover:text-white'
                   }`}
                 >
-                  <IndianRupee size={12} />
+                  <IndianRupee size={14} />
                   <span>Offering</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setActiveTab('alerts')}
-                  className={`py-2 px-1 rounded-xl transition-all flex flex-col items-center gap-0.5 cursor-pointer ${
-                    activeTab === 'alerts'
-                      ? 'bg-sky-500 text-slate-950 shadow-md'
+                  onClick={() => setActiveTab('spent')}
+                  className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    activeTab === 'spent'
+                      ? 'bg-sky-500 text-slate-950 shadow-md font-bold'
                       : 'text-slate-300 hover:text-white'
                   }`}
                 >
-                  <Bell size={12} />
-                  <span>Alerts</span>
+                  <Receipt size={14} />
+                  <span>Spent</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setActiveTab('volunteers')}
-                  className={`py-2 px-1 rounded-xl transition-all flex flex-col items-center gap-0.5 cursor-pointer ${
+                  className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                     activeTab === 'volunteers'
-                      ? 'bg-sky-500 text-slate-950 shadow-md'
+                      ? 'bg-sky-500 text-slate-950 shadow-md font-bold'
                       : 'text-slate-300 hover:text-white'
                   }`}
                 >
-                  <Users size={12} />
+                  <Users size={14} />
                   <span>Roster</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('broadcast')}
-                  className={`py-2 px-1 rounded-xl transition-all flex flex-col items-center gap-0.5 cursor-pointer ${
-                    activeTab === 'broadcast'
-                      ? 'bg-sky-500 text-slate-950 shadow-md'
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  <Send size={12} />
-                  <span>Siren</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('updates')}
-                  className={`py-2 px-1 rounded-xl transition-all flex flex-col items-center gap-0.5 cursor-pointer ${
-                    activeTab === 'updates'
-                      ? 'bg-sky-500 text-slate-950 shadow-md'
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  <Download size={12} />
-                  <span>APK Updates</span>
                 </button>
               </div>
 
-              {/* Tab 1: Offering Balance Management */}
+              {/* TAB 1: OFFERING BALANCE */}
               {activeTab === 'balance' && (
                 <div className="space-y-3">
-                  {/* Current Balance Display Card */}
                   <div className="p-4 rounded-2xl bg-[#101c36] border border-amber-500/30 text-center shadow-lg relative overflow-hidden">
                     <span className="text-[10.5px] uppercase font-black tracking-widest text-amber-400">
                       Live Authoritative Balance
@@ -465,11 +486,10 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                       {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(offeringBalance.amount)}
                     </h2>
                     <p className="text-[10px] text-slate-400">
-                      Last updated: {new Date(offeringBalance.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} by {offeringBalance.updatedBy}
+                      Last updated: {new Date(offeringBalance.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} by {offeringBalance.updatedBy}
                     </p>
                   </div>
 
-                  {/* Update Form */}
                   <form onSubmit={handleUpdateBalance} className="p-4 rounded-2xl bg-[#101c36] border border-sky-500/20 space-y-3">
                     <label className="block text-xs font-black text-sky-300 uppercase tracking-wide">
                       Update Total Offering Amount (₹)
@@ -503,77 +523,138 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                 </div>
               )}
 
-              {/* Tab 2: Alert History & Live Responses */}
-              {activeTab === 'alerts' && (
-                <div className="space-y-3">
-                  {activeAlert ? (
-                    <div className="p-3.5 rounded-2xl bg-rose-500/20 border border-rose-500/50 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-rose-300 flex items-center gap-1.5 uppercase">
-                          <Activity size={13} className="animate-pulse" />
-                          ACTIVE LIVE ALERT
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleResolveAlert(activeAlert.id)}
-                          className="px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-black text-[10px] uppercase cursor-pointer"
-                        >
-                          Resolve Alert
-                        </button>
+              {/* TAB 2: SPENT OPTION (Inputs: Date, Purpose, Money Spent) */}
+              {activeTab === 'spent' && (
+                <div className="space-y-3.5">
+                  <form onSubmit={handleSaveSpent} className="p-4 rounded-2xl bg-[#101c36] border border-sky-500/20 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-rose-500/20 flex items-center justify-center text-rose-400">
+                        <Receipt size={14} />
+                      </div>
+                      <span className="text-xs font-black text-rose-300 uppercase tracking-wide">
+                        Record Spent Money
+                      </span>
+                    </div>
+
+                    <p className="text-[10px] text-slate-400">
+                      Enter festival expenditures. Once saved, these will appear immediately in the Spent Money list on the Blessings page.
+                    </p>
+
+                    {spentSuccess && (
+                      <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
+                        <CheckCircle2 size={14} className="shrink-0 text-emerald-400" />
+                        <span>{spentSuccess}</span>
+                      </div>
+                    )}
+
+                    {spentError && (
+                      <div className="p-2.5 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-200 text-xs flex items-center gap-2">
+                        <AlertTriangle size={14} className="shrink-0 text-rose-400" />
+                        <span>{spentError}</span>
+                      </div>
+                    )}
+
+                    {/* Inputs: Date, Purpose, Money Spent */}
+                    <div className="space-y-2.5">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                          Date
+                        </label>
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0c152a] border border-sky-500/30 text-white focus-within:border-sky-400">
+                          <Calendar size={13} className="text-sky-400 shrink-0" />
+                          <input
+                            type="date"
+                            value={spentDate}
+                            onChange={(e) => setSpentDate(e.target.value)}
+                            className="w-full bg-transparent text-xs font-mono text-white focus:outline-none"
+                            required
+                          />
+                        </div>
                       </div>
 
-                      <p className="text-xs text-white font-bold leading-snug">
-                        "{activeAlert.message}"
-                      </p>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                          Purpose
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Sound system advance, Food supplies..."
+                          value={spentPurpose}
+                          onChange={(e) => setSpentPurpose(e.target.value)}
+                          className="w-full py-2 px-3 rounded-xl bg-[#0c152a] border border-sky-500/30 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
+                          required
+                        />
+                      </div>
 
-                      <div className="grid grid-cols-3 gap-1.5 pt-1 text-center">
-                        <div className="p-2 rounded-xl bg-[#0c152a] border border-emerald-500/30">
-                          <span className="text-[10px] text-emerald-300 font-bold block">COMING</span>
-                          <span className="text-base font-black text-emerald-400 font-mono">
-                            {activeAlert.responses?.coming?.length || 0}
-                          </span>
-                        </div>
-                        <div className="p-2 rounded-xl bg-[#0c152a] border border-amber-500/30">
-                          <span className="text-[10px] text-amber-300 font-bold block">LATE</span>
-                          <span className="text-base font-black text-amber-400 font-mono">
-                            {activeAlert.responses?.coming_late?.length || 0}
-                          </span>
-                        </div>
-                        <div className="p-2 rounded-xl bg-[#0c152a] border border-rose-500/30">
-                          <span className="text-[10px] text-rose-300 font-bold block">CAN'T</span>
-                          <span className="text-base font-black text-rose-400 font-mono">
-                            {activeAlert.responses?.not_coming?.length || 0}
-                          </span>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                          Money Spent (₹)
+                        </label>
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0c152a] border border-sky-500/30 text-white focus-within:border-sky-400">
+                          <span className="text-rose-400 font-bold text-sm">₹</span>
+                          <input
+                            type="number"
+                            placeholder="e.g. 15000"
+                            value={spentAmount}
+                            onChange={(e) => setSpentAmount(e.target.value)}
+                            className="w-full bg-transparent text-xs font-mono font-bold text-white focus:outline-none"
+                            required
+                          />
                         </div>
                       </div>
                     </div>
-                  ) : (
-                    <div className="p-4 rounded-2xl bg-[#101c36] border border-sky-500/20 text-center text-xs text-slate-400">
-                      <CheckCircle2 size={20} className="text-emerald-400 mx-auto mb-1 opacity-80" />
-                      No active emergency alert currently running.
-                    </div>
-                  )}
 
-                  {/* Past Alerts List */}
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                      Recent Alert Events
-                    </span>
-                    <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-                      {alertHistory.length === 0 ? (
-                        <p className="text-[11px] text-slate-500 italic">No previous alerts recorded.</p>
+                    <button
+                      type="submit"
+                      disabled={isSavingSpent}
+                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 text-white font-bold text-xs uppercase tracking-wider transition-all active:scale-98 cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+                    >
+                      {isSavingSpent ? (
+                        <>
+                          <RefreshCw size={13} className="animate-spin" />
+                          <span>Saving Expenditure...</span>
+                        </>
                       ) : (
-                        alertHistory.map((a) => (
-                          <div key={a.id} className="p-2.5 rounded-xl bg-[#101c36] border border-sky-500/15 text-xs flex items-center justify-between">
-                            <div className="text-left">
-                              <span className="font-bold text-white text-[11px] block">{a.message}</span>
-                              <span className="text-[9.5px] text-sky-300/80 font-mono">{a.timeFormatted} &bull; By {a.triggeredBy.name}</span>
+                        <>
+                          <Receipt size={13} />
+                          <span>Save Expenditure</span>
+                        </>
+                      )}
+                    </button>
+                  </form>
+
+                  {/* Existing Expenditures List */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between pb-0.5">
+                      <span className="text-xs font-black text-white uppercase">
+                        Recorded Expenditures ({expendituresList.length})
+                      </span>
+                    </div>
+
+                    <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
+                      {expendituresList.length === 0 ? (
+                        <p className="text-[11px] text-slate-500 italic p-2 text-center">No expenditures recorded yet.</p>
+                      ) : (
+                        expendituresList.map((item) => (
+                          <div 
+                            key={item.id} 
+                            className="p-2.5 rounded-xl bg-[#101c36] border border-sky-500/20 flex items-center justify-between text-xs"
+                          >
+                            <div className="flex flex-col text-left min-w-0 pr-2">
+                              <span className="font-bold text-white text-xs truncate">{item.purpose}</span>
+                              <span className="text-[9.5px] text-sky-300/80 font-mono">
+                                {item.date} &bull; ₹{Number(item.amount).toLocaleString('en-IN')}
+                              </span>
                             </div>
-                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
-                              a.status === 'active' ? 'bg-rose-500/30 text-rose-300' : 'bg-slate-700 text-slate-300'
-                            }`}>
-                              {a.status.toUpperCase()}
-                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSpent(item.id, item.purpose)}
+                              className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 cursor-pointer transition-colors shrink-0"
+                              title="Delete this record"
+                            >
+                              <Trash2 size={13} />
+                            </button>
                           </div>
                         ))
                       )}
@@ -582,7 +663,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                 </div>
               )}
 
-              {/* Tab 3: Provision Accounts & Volunteer Roster */}
+              {/* TAB 3: ROSTER (Show registered volunteers with Edit button beside them to edit name) */}
               {activeTab === 'volunteers' && (
                 <div className="space-y-3">
                   {/* Account Provisioning Form */}
@@ -592,13 +673,9 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                         <UserPlus size={14} />
                       </div>
                       <span className="text-xs font-black text-amber-400 uppercase tracking-wide">
-                        Provision Volunteer Account
+                        Register New Volunteer
                       </span>
                     </div>
-
-                    <p className="text-[10px] text-slate-400">
-                      Create secure volunteer credentials. The volunteer will use this ID and password to sign into the Alert & Coordination screen.
-                    </p>
 
                     {createVolSuccess && (
                       <div className="p-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
@@ -619,7 +696,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                         <label className="text-[10px] font-bold text-slate-300 block mb-1">Volunteer ID</label>
                         <input
                           type="text"
-                          placeholder="e.g. 001, 002"
+                          placeholder="e.g. 001"
                           value={newVolId}
                           onChange={(e) => setNewVolId(e.target.value)}
                           className="w-full py-1.5 px-2.5 rounded-xl bg-[#0c152a] border border-sky-500/30 text-xs text-white placeholder-slate-500 font-mono outline-none"
@@ -665,18 +742,18 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                       {isCreatingVol ? (
                         <>
                           <RefreshCw size={12} className="animate-spin" />
-                          <span>Creating in Firebase Auth...</span>
+                          <span>Creating...</span>
                         </>
                       ) : (
                         <>
                           <UserPlus size={13} />
-                          <span>Create Volunteer Account</span>
+                          <span>Register Volunteer</span>
                         </>
                       )}
                     </button>
                   </form>
 
-                  {/* Registered Volunteers List */}
+                  {/* Registered Volunteers List with Edit Name Button */}
                   <div className="space-y-1.5 pt-1">
                     <div className="flex items-center justify-between pb-0.5">
                       <span className="text-xs font-black text-white uppercase">
@@ -692,134 +769,85 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                       </button>
                     </div>
 
-                    <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
+                    {nameUpdateSuccess && (
+                      <div className="p-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-1.5">
+                        <CheckCircle2 size={13} className="text-emerald-400" />
+                        <span>{nameUpdateSuccess}</span>
+                      </div>
+                    )}
+
+                    <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
                       {volunteersList.length === 0 ? (
                         <p className="text-[11px] text-slate-500 italic p-2 text-center">No volunteers registered yet.</p>
                       ) : (
                         volunteersList.map((vol) => (
-                          <div key={vol.id} className="p-2.5 rounded-xl bg-[#101c36] border border-sky-500/20 flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-300 font-mono font-black flex items-center justify-center text-[10.5px]">
+                          <div 
+                            key={vol.id} 
+                            className="p-2.5 rounded-xl bg-[#101c36] border border-sky-500/20 flex items-center justify-between text-xs transition-colors"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                              <div className="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-300 font-mono font-black flex items-center justify-center text-xs shrink-0">
                                 {vol.id}
                               </div>
-                              <div className="text-left">
-                                <span className="font-bold text-white text-xs block leading-tight">{vol.name}</span>
-                                <span className="text-[9.5px] text-slate-400">
-                                  {vol.active !== false ? 'Active Account' : 'Deactivated'}
-                                </span>
-                              </div>
+
+                              {editingVolId === vol.id ? (
+                                <div className="flex items-center gap-1.5 flex-1">
+                                  <input
+                                    type="text"
+                                    value={editingVolName}
+                                    onChange={(e) => setEditingVolName(e.target.value)}
+                                    className="py-1 px-2 rounded-lg bg-[#0c152a] border border-sky-400 text-xs text-white outline-none w-full font-bold"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleSaveVolunteerName(vol.id);
+                                      if (e.key === 'Escape') setEditingVolId(null);
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveVolunteerName(vol.id)}
+                                    disabled={isUpdatingName}
+                                    className="p-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold cursor-pointer transition-colors shrink-0"
+                                    title="Save name"
+                                  >
+                                    <Check size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingVolId(null)}
+                                    className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 cursor-pointer transition-colors shrink-0"
+                                    title="Cancel"
+                                  >
+                                    <X size={13} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="text-left min-w-0">
+                                  <span className="font-bold text-white text-xs block leading-tight truncate">
+                                    {vol.name}
+                                  </span>
+                                  <span className="text-[9.5px] text-slate-400 font-mono">
+                                    Volunteer ID: {vol.id}
+                                  </span>
+                                </div>
+                              )}
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => handleToggleVolunteerStatus(vol)}
-                              className={`p-1.5 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 ${
-                                vol.active !== false
-                                  ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
-                                  : 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30'
-                              }`}
-                              title={vol.active !== false ? 'Click to deactivate' : 'Click to activate'}
-                            >
-                              {vol.active !== false ? <UserCheck size={13} /> : <UserX size={13} />}
-                              <span>{vol.active !== false ? 'Active' : 'Disabled'}</span>
-                            </button>
+                            {editingVolId !== vol.id && (
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditName(vol)}
+                                className="px-2.5 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 font-bold text-[11px] cursor-pointer transition-all flex items-center gap-1 shrink-0 active:scale-95"
+                                title="Edit volunteer name"
+                              >
+                                <Edit3 size={11} />
+                                <span>Edit</span>
+                              </button>
+                            )}
                           </div>
                         ))
                       )}
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Tab 4: Official Broadcast */}
-              {activeTab === 'broadcast' && (
-                <form onSubmit={handleSendAdminBroadcast} className="p-4 rounded-2xl bg-[#101c36] border border-sky-500/20 space-y-3">
-                  <label className="block text-xs font-black text-amber-400 uppercase tracking-wide">
-                    Emergency Broadcast / Official Call
-                  </label>
-                  <p className="text-[11px] text-slate-400">
-                    Sends high-priority siren alert + chat banner + push notification to every connected volunteer device.
-                  </p>
-
-                  <textarea
-                    rows={3}
-                    placeholder="e.g. All worship team members report to green room for sound check..."
-                    value={broadcastMessage}
-                    onChange={(e) => setBroadcastMessage(e.target.value)}
-                    className="w-full p-3 rounded-xl bg-[#0c152a] border border-sky-500/30 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 font-medium resize-none"
-                  />
-
-                  {broadcastSent && (
-                    <p className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 animate-pulse">
-                      <CheckCircle2 size={14} />
-                      <span>Broadcast siren and alert dispatched across all devices!</span>
-                    </p>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={isLoading || !broadcastMessage.trim()}
-                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-rose-700 hover:from-rose-400 hover:to-rose-600 disabled:opacity-40 text-white font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2"
-                  >
-                    {isLoading ? <RefreshCw size={14} className="animate-spin" /> : <Bell size={14} />}
-                    <span>DISPATCH OFFICIAL BROADCAST</span>
-                  </button>
-                </form>
-              )}
-
-              {/* Tab 5: Private APK Update Manager */}
-              {activeTab === 'updates' && (
-                <div className="space-y-3 text-left">
-                  {/* Current App Info */}
-                  <div className="p-3.5 rounded-2xl bg-[#101c36] border border-sky-500/25 space-y-2">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 block">
-                      Installed Application Info
-                    </span>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">Version Name</span>
-                        <span className="font-mono font-bold text-white">v{APP_VERSION.versionName}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">Version Code</span>
-                        <span className="font-mono font-bold text-white">{APP_VERSION.versionCode}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Server Manifest Status */}
-                  <div className="p-3.5 rounded-2xl bg-[#0c152a] border border-sky-500/20 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-sky-300">
-                        Server Published Manifest
-                      </span>
-                      <span className="text-[9.5px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                        ACTIVE
-                      </span>
-                    </div>
-
-                    {serverManifest ? (
-                      <div className="space-y-1.5 text-xs text-slate-300">
-                        <p><strong className="text-white">Latest Version:</strong> v{serverManifest.latestVersionName} (Build {serverManifest.latestVersionCode})</p>
-                        <p><strong className="text-white">Min Supported:</strong> Build {serverManifest.minimumSupportedVersionCode}</p>
-                        <p><strong className="text-white">APK Target:</strong> <span className="font-mono text-[10px] text-sky-300">{serverManifest.apkUrl}</span></p>
-                        <p><strong className="text-white">SHA-256:</strong> <span className="font-mono text-[9.5px] text-slate-400 break-all">{serverManifest.sha256}</span></p>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-400 italic">No manifest loaded yet.</p>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="space-y-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleTriggerClientUpdateCheck}
-                      className="w-full py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center justify-center gap-2"
-                    >
-                      <RefreshCw size={13} />
-                      <span>TEST UPDATE CHECK DIALOG</span>
-                    </button>
                   </div>
                 </div>
               )}

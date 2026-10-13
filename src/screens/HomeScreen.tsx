@@ -1,27 +1,19 @@
 // src/screens/HomeScreen.tsx
-// Home Dashboard matching Figma Redesign Specification
-// "Welcome to RRBM", Three-Day Fasting Prayer with "D3" watermark, 3 Quick Actions, Volunteer Alert & Worship Songs
+// Home Dashboard matching RRBM Revival Fast 2026 Specification
+// "Welcome to RRBM", Three-Day Fasting Prayer with "D3" watermark & Social Media Channels
 
 import React, { useState, useEffect } from 'react';
 import { 
   Bell, 
   Calendar, 
   MapPin, 
-  ChevronRight, 
-  Music, 
-  Coins, 
   Clock, 
-  Radio, 
-  Megaphone,
-  CheckCircle2,
-  XCircle,
-  Play,
   Sparkles,
-  Ticket
+  Ticket,
+  ExternalLink
 } from 'lucide-react';
 import { TabType } from '../types/navigation';
 import { realtimeStore } from '../services/realtimeStore';
-import { SONGS_DATA } from '../data/songsData';
 
 interface HomeScreenProps {
   onNavigate?: (tab: TabType) => void;
@@ -29,48 +21,21 @@ interface HomeScreenProps {
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
   const [activeAlert, setActiveAlert] = useState(() => realtimeStore.getActiveAlert());
-  const [currentVolunteer, setCurrentVolunteer] = useState(() => realtimeStore.getCurrentVolunteer());
-  const [selectedResponse, setSelectedResponse] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = realtimeStore.subscribe(() => {
       setActiveAlert(realtimeStore.getActiveAlert());
-      setCurrentVolunteer(realtimeStore.getCurrentVolunteer());
     });
     return unsubscribe;
   }, []);
 
-  useEffect(() => {
-    if (activeAlert && currentVolunteer) {
-      if (activeAlert.responses?.coming?.includes(currentVolunteer.id)) {
-        setSelectedResponse('coming');
-      } else if (activeAlert.responses?.coming_late?.includes(currentVolunteer.id)) {
-        setSelectedResponse('coming_late');
-      } else if (activeAlert.responses?.not_coming?.includes(currentVolunteer.id)) {
-        setSelectedResponse('not_coming');
-      } else {
-        setSelectedResponse(null);
-      }
-    } else {
-      setSelectedResponse(null);
-    }
-  }, [activeAlert, currentVolunteer]);
-
-  const handleQuickResponse = async (type: 'coming' | 'coming_late' | 'not_coming') => {
-    setSelectedResponse(type);
-    try {
-      await realtimeStore.sendQuickResponse(type);
-    } catch {
-      // Ignore
-    }
+  const openSocialLink = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  // Preview songs for the dashboard widget
-  const previewSongs = SONGS_DATA.day2.slice(0, 3);
-
   return (
-    <div className="home-screen flex flex-col w-full space-y-5 pb-6 select-none">
-      {/* 1. Top Greeting Header (Figma Design) */}
+    <div className="home-screen flex flex-col w-full space-y-5 pb-6 select-none max-w-4xl mx-auto">
+      {/* 1. Top Greeting Header */}
       <div className="w-full flex items-start justify-between pt-1">
         <div className="flex flex-col">
           <div className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-sky-400 uppercase tracking-widest mb-1">
@@ -78,7 +43,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
             <span>October 20–22, 2026 &bull; Three-Day Festival</span>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl text-4xl font-black text-white tracking-tight leading-tight">
+          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
             Welcome to RRBM
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-xl">
@@ -114,7 +79,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           style={{ background: 'radial-gradient(circle, rgba(56, 189, 248, 0.18) 0%, transparent 70%)' }} 
         />
 
-        {/* "D3" Watermark matching Figma */}
+        {/* "D3" Watermark */}
         <div className="hero-watermark" aria-hidden="true">
           D3
         </div>
@@ -148,11 +113,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
 
         {/* Title and Description */}
         <div className="relative z-10 space-y-1.5">
-          <h2 className="text-xl sm:text-2xl text-3xl font-black text-white tracking-tight">
+          <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
             Three-Day Fasting Prayer
           </h2>
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl">
-            Reviving lives through Christ Jesus with three days of dedicated fasting, worship and prayer. Join with believers across Vijayawada and worldwide.
+            Reviving lives through Christ Jesus with three days of dedicated fasting, worship and prayer. Join with believers across K.Nayakampalli and worldwide.
           </p>
         </div>
 
@@ -167,378 +132,204 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           </div>
           <div className="flex items-center gap-2">
             <MapPin size={15} className="text-sky-400 shrink-0" />
-            <span className="font-semibold">RRBM Main Hall, Vijayawada</span>
+            <span className="font-semibold">Immanuel Prardhana Mandhiram, K.Nayakampalli</span>
           </div>
         </div>
       </div>
 
-      {/* 3. Quick Actions Section (3 Cards in Responsive Grid) */}
-      <div className="w-full flex flex-col space-y-3">
+      {/* 3. Official Media & Ministry Channels Section */}
+      <div className="w-full flex flex-col space-y-3.5 pt-1">
         <div className="flex items-baseline justify-between px-0.5">
           <div>
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Quick Actions
+              Official Media & Ministry Channels
             </h3>
             <span className="text-[11px] text-slate-500">
-              Immediate access to essential ministry tools
+              Watch live fasting prayer sessions, sermons, and ministry updates
             </span>
           </div>
         </div>
 
-        <div className="quick-actions-grid">
-          {/* Action 1: Alerts */}
-          <button
-            type="button"
-            id="quick-action-alerts"
-            onClick={() => onNavigate && onNavigate('alert')}
-            className="rounded-2xl p-4 flex items-center justify-between text-left cursor-pointer transition-all clean-card"
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          {/* Channel 1: YouTube - Joshua Chetla */}
+          <div
+            onClick={() => openSocialLink('https://youtube.com/@joshuachetla8512?si=z1YW1beGfjx2fhOy')}
+            className="p-4 rounded-2xl flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] group shadow-lg"
             style={{
               background: '#101726',
-              border: activeAlert ? '1px solid rgba(244, 63, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)'
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)'
             }}
           >
             <div className="flex items-center gap-3.5">
               <div 
-                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md"
                 style={{
-                  background: activeAlert ? 'rgba(244, 63, 94, 0.15)' : 'rgba(56, 189, 248, 0.15)',
-                  border: activeAlert ? '1px solid rgba(244, 63, 94, 0.3)' : '1px solid rgba(56, 189, 248, 0.28)',
-                  color: activeAlert ? '#FB7185' : '#38BDF8'
+                  background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(185, 28, 28, 0.3) 100%)',
+                  border: '1px solid rgba(239, 68, 68, 0.4)'
                 }}
               >
-                <Radio size={20} className={activeAlert ? 'animate-pulse' : ''} />
+                {/* YouTube SVG Icon */}
+                <svg viewBox="0 0 24 24" className="w-6 h-6 fill-red-500">
+                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                </svg>
               </div>
 
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-white">Alerts</span>
-                  <span 
-                    className="px-2 py-0.5 rounded-full text-[9px] font-bold"
-                    style={{
-                      background: activeAlert ? 'rgba(244, 63, 94, 0.2)' : 'rgba(56, 189, 248, 0.12)',
-                      color: activeAlert ? '#FB7185' : '#38BDF8'
-                    }}
-                  >
-                    {activeAlert ? '1 active' : 'Standby'}
+                  <span className="text-sm font-black text-white group-hover:text-red-400 transition-colors">
+                    Joshua Chetla
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/30">
+                    YouTube
                   </span>
                 </div>
-                <span className="text-xs text-slate-400 mt-0.5">
-                  Send an urgent call
+                <span className="text-[11px] text-slate-400 font-mono mt-0.5">
+                  @joshuachetla8512
+                </span>
+                <span className="text-[10px] text-slate-500 mt-0.5">
+                  Live prayers, fasting sermons & teachings
                 </span>
               </div>
             </div>
 
-            <ChevronRight size={18} className="text-slate-400 shrink-0" />
-          </button>
+            <ExternalLink size={16} className="text-slate-400 group-hover:text-red-400 transition-colors shrink-0 mr-1" />
+          </div>
 
-          {/* Action 2: Songs */}
-          <button
-            type="button"
-            id="quick-action-songs"
-            onClick={() => onNavigate && onNavigate('songs')}
-            className="rounded-2xl p-4 flex items-center justify-between text-left cursor-pointer transition-all clean-card"
+          {/* Channel 2: YouTube - R.R-B Edits */}
+          <div
+            onClick={() => openSocialLink('https://youtube.com/@r.r-bedits2160?si=gGV1nyHdHomPfg_B')}
+            className="p-4 rounded-2xl flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] group shadow-lg"
             style={{
               background: '#101726',
-              border: '1px solid rgba(255, 255, 255, 0.08)'
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)'
             }}
           >
             <div className="flex items-center gap-3.5">
               <div 
-                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md"
                 style={{
-                  background: 'rgba(56, 189, 248, 0.15)',
-                  border: '1px solid rgba(56, 189, 248, 0.28)',
-                  color: '#38BDF8'
+                  background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(185, 28, 28, 0.3) 100%)',
+                  border: '1px solid rgba(239, 68, 68, 0.4)'
                 }}
               >
-                <Music size={20} />
+                {/* YouTube SVG Icon */}
+                <svg viewBox="0 0 24 24" className="w-6 h-6 fill-red-500">
+                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                </svg>
               </div>
 
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-white">Songs</span>
-                  <span 
-                    className="px-2 py-0.5 rounded-full text-[9px] font-bold"
-                    style={{
-                      background: 'rgba(56, 189, 248, 0.12)',
-                      color: '#38BDF8'
-                    }}
-                  >
-                    18 songs
+                  <span className="text-sm font-black text-white group-hover:text-red-400 transition-colors">
+                    R.R-B Edits
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/30">
+                    YouTube
                   </span>
                 </div>
-                <span className="text-xs text-slate-400 mt-0.5">
-                  Praise & worship list
+                <span className="text-[11px] text-slate-400 font-mono mt-0.5">
+                  @r.r-bedits2160
+                </span>
+                <span className="text-[10px] text-slate-500 mt-0.5">
+                  Worship songs, devotionals & festival edits
                 </span>
               </div>
             </div>
 
-            <ChevronRight size={18} className="text-slate-400 shrink-0" />
-          </button>
+            <ExternalLink size={16} className="text-slate-400 group-hover:text-red-400 transition-colors shrink-0 mr-1" />
+          </div>
 
-          {/* Action 3: Money Jar */}
-          <button
-            type="button"
-            id="quick-action-money"
-            onClick={() => onNavigate && onNavigate('money')}
-            className="rounded-2xl p-4 flex items-center justify-between text-left cursor-pointer transition-all clean-card"
+          {/* Channel 3: Facebook - Joshua Chetla */}
+          <div
+            onClick={() => openSocialLink('https://www.facebook.com/Joshua7722')}
+            className="p-4 rounded-2xl flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] group shadow-lg"
             style={{
               background: '#101726',
-              border: '1px solid rgba(255, 255, 255, 0.08)'
+              border: '1px solid rgba(24, 119, 242, 0.25)',
+              boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)'
             }}
           >
             <div className="flex items-center gap-3.5">
               <div 
-                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md"
                 style={{
-                  background: 'rgba(245, 158, 11, 0.15)',
-                  border: '1px solid rgba(245, 158, 11, 0.28)',
-                  color: '#FBBF24'
+                  background: 'linear-gradient(135deg, rgba(24, 119, 242, 0.25) 0%, rgba(29, 78, 216, 0.3) 100%)',
+                  border: '1px solid rgba(24, 119, 242, 0.4)'
                 }}
               >
-                <Coins size={20} />
+                {/* Facebook SVG Icon */}
+                <svg viewBox="0 0 24 24" className="w-6 h-6 fill-[#1877F2]">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
               </div>
 
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-white">Money Jar</span>
-                  <span 
-                    className="px-2 py-0.5 rounded-full text-[9px] font-bold"
-                    style={{
-                      background: 'rgba(245, 158, 11, 0.12)',
-                      color: '#FBBF24'
-                    }}
-                  >
-                    Offering
+                  <span className="text-sm font-black text-white group-hover:text-blue-400 transition-colors">
+                    Joshua Chetla
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                    Facebook
                   </span>
                 </div>
-                <span className="text-xs text-slate-400 mt-0.5">
-                  Offering balance
+                <span className="text-[11px] text-slate-400 font-mono mt-0.5">
+                  facebook.com/Joshua7722
+                </span>
+                <span className="text-[10px] text-slate-500 mt-0.5">
+                  Ministry updates, community & live broadcast
                 </span>
               </div>
             </div>
 
-            <ChevronRight size={18} className="text-slate-400 shrink-0" />
-          </button>
-        </div>
-      </div>
-
-      {/* 4. Lower Dashboard Grid: Volunteer Alert + Worship Songs */}
-      <div className="dashboard-lower-grid">
-        {/* Left Column: Volunteer Alert Card */}
-        <div 
-          className="clean-card p-5 flex flex-col justify-between space-y-4"
-          style={{
-            background: '#101726',
-            border: activeAlert ? '1px solid rgba(244, 63, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)'
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Bell size={16} className="text-sky-400" />
-              <span className="text-sm font-bold text-white">Volunteer Alert</span>
-            </div>
-
-            <span 
-              className="px-2.5 py-0.5 rounded-full text-[10px] font-bold"
-              style={{
-                background: activeAlert ? 'rgba(244, 63, 94, 0.2)' : 'rgba(56, 189, 248, 0.15)',
-                color: activeAlert ? '#FB7185' : '#38BDF8',
-                border: activeAlert ? '1px solid rgba(244, 63, 94, 0.3)' : '1px solid rgba(56, 189, 248, 0.3)'
-              }}
-            >
-              {activeAlert ? 'Active' : 'Standby'}
-            </span>
+            <ExternalLink size={16} className="text-slate-400 group-hover:text-blue-400 transition-colors shrink-0 mr-1" />
           </div>
 
-          {/* Central Concentric Circular Alert Trigger */}
-          <div className="flex flex-col items-center text-center py-2">
-            <div className="concentric-outer my-1">
-              <div className="concentric-mid">
-                <button
-                  type="button"
-                  id="home-alert-circle-btn"
-                  onClick={() => onNavigate && onNavigate('alert')}
-                  className={`concentric-button ${activeAlert ? 'is-active-alert' : ''}`}
-                  aria-label="Open Alert"
-                >
-                  <Megaphone size={20} className={activeAlert ? 'text-rose-400' : 'text-sky-400'} />
-                  <span className={`text-[10px] font-bold mt-1 ${activeAlert ? 'text-rose-400' : 'text-sky-400'}`}>
-                    Alert
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-400 max-w-xs mt-2 leading-relaxed">
-              Tap to send a push notification to all available volunteers in your ministry group.
-            </p>
-          </div>
-
-          {/* If Alert Active: 3 Quick Responses */}
-          {activeAlert && (
-            <div 
-              className="p-3 rounded-xl flex flex-col space-y-2"
-              style={{
-                background: 'rgba(244, 63, 94, 0.12)',
-                border: '1px solid rgba(244, 63, 94, 0.3)'
-              }}
-            >
-              <span className="text-[10px] font-bold text-rose-300 uppercase tracking-wider flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping" />
-                Quick Response
-              </span>
-
-              <div className="grid grid-cols-3 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => handleQuickResponse('coming')}
-                  className={`py-1.5 text-center rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
-                    selectedResponse === 'coming'
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-emerald-950 text-emerald-300 border border-emerald-500'
-                  }`}
-                  style={{ background: selectedResponse === 'coming' ? '#059669' : 'rgba(6, 78, 59, 0.6)' }}
-                >
-                  <CheckCircle2 size={12} className="mx-auto mb-0.5" />
-                  <span>I'm Coming</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickResponse('coming_late')}
-                  className={`py-1.5 text-center rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
-                    selectedResponse === 'coming_late'
-                      ? 'bg-amber-600 text-white'
-                      : 'bg-amber-950 text-amber-300 border border-amber-500'
-                  }`}
-                  style={{ background: selectedResponse === 'coming_late' ? '#D97706' : 'rgba(120, 53, 15, 0.6)' }}
-                >
-                  <Clock size={12} className="mx-auto mb-0.5" />
-                  <span>Coming Late</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickResponse('not_coming')}
-                  className={`py-1.5 text-center rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
-                    selectedResponse === 'not_coming'
-                      ? 'bg-rose-700 text-white'
-                      : 'bg-rose-950 text-rose-300 border border-rose-500'
-                  }`}
-                  style={{ background: selectedResponse === 'not_coming' ? '#BE123C' : 'rgba(136, 19, 55, 0.6)' }}
-                >
-                  <XCircle size={12} className="mx-auto mb-0.5" />
-                  <span>Can't Come</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Console Action Button */}
-          <button
-            type="button"
-            onClick={() => onNavigate && onNavigate('alert')}
-            className="w-full py-2.5 rounded-xl text-xs font-bold text-sky-400 hover:text-white cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+          {/* Channel 4: Instagram - @joshuachetla */}
+          <div
+            onClick={() => openSocialLink('https://www.instagram.com/joshuachetla?igsh=ZHozc3Riam12d3Yw')}
+            className="p-4 rounded-2xl flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] group shadow-lg"
             style={{
-              background: 'rgba(56, 189, 248, 0.1)',
-              border: '1px solid rgba(56, 189, 248, 0.2)'
+              background: '#101726',
+              border: '1px solid rgba(225, 48, 108, 0.25)',
+              boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)'
             }}
           >
-            <span>Open Alert Console</span>
-            <ChevronRight size={14} />
-          </button>
-        </div>
-
-        {/* Right Column: Worship Songs Preview Card */}
-        <div 
-          className="clean-card p-5 flex flex-col justify-between space-y-3"
-          style={{
-            background: '#101726',
-            border: '1px solid rgba(255, 255, 255, 0.08)'
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Music size={16} className="text-sky-400" />
-              <span className="text-sm font-bold text-white">Worship Songs</span>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => onNavigate && onNavigate('songs')}
-              className="text-xs font-bold text-sky-400 hover:text-sky-300 flex items-center gap-1 cursor-pointer transition-colors"
-            >
-              <span>View all</span>
-              <ChevronRight size={13} />
-            </button>
-          </div>
-
-          <p className="text-[11px] text-slate-400">
-            Selected praise songs for Day 2 (Consecration & Intercession)
-          </p>
-
-          {/* Songs List */}
-          <div className="space-y-2 pt-1 flex-1">
-            {previewSongs.map((song) => (
-              <div
-                key={song.id}
-                onClick={() => onNavigate && onNavigate('songs')}
-                className="p-3 rounded-xl flex items-center justify-between cursor-pointer transition-all hover:bg-slate-800"
+            <div className="flex items-center gap-3.5">
+              <div 
+                className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md"
                 style={{
-                  background: 'rgba(6, 11, 24, 0.65)',
-                  border: '1px solid rgba(255, 255, 255, 0.05)'
+                  background: 'linear-gradient(135deg, rgba(225, 48, 108, 0.25) 0%, rgba(131, 58, 180, 0.3) 100%)',
+                  border: '1px solid rgba(225, 48, 108, 0.4)'
                 }}
               >
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div 
-                    className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                    style={{ background: 'rgba(56, 189, 248, 0.12)', color: '#38BDF8' }}
-                  >
-                    <Play size={13} className="ml-0.5" />
-                  </div>
-
-                  <div className="flex flex-col overflow-hidden">
-                    <span className="text-xs font-bold text-white truncate">
-                      {song.title}
-                    </span>
-                    <span className="text-[10px] text-slate-400 truncate mt-0.5">
-                      {song.sub} &bull; {song.key}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-[10.5px] font-mono text-slate-400">
-                    {song.time}
-                  </span>
-                  <span 
-                    className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.06)',
-                      color: '#CBD5E1'
-                    }}
-                  >
-                    {song.category}
-                  </span>
-                </div>
+                {/* Instagram SVG Icon */}
+                <svg viewBox="0 0 24 24" className="w-6 h-6 fill-[#E1306C]">
+                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                </svg>
               </div>
-            ))}
-          </div>
 
-          {/* Footer Action */}
-          <button
-            type="button"
-            onClick={() => onNavigate && onNavigate('songs')}
-            className="w-full py-2.5 rounded-xl text-xs font-bold text-sky-400 hover:text-white cursor-pointer transition-colors flex items-center justify-center gap-1.5 pt-2"
-            style={{
-              background: 'rgba(56, 189, 248, 0.1)',
-              border: '1px solid rgba(56, 189, 248, 0.2)'
-            }}
-          >
-            <span>Open Praise Songs Player</span>
-            <ChevronRight size={14} />
-          </button>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-black text-white group-hover:text-pink-400 transition-colors">
+                    Joshua Chetla
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-pink-500/15 text-pink-400 border border-pink-500/30">
+                    Instagram
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-400 font-mono mt-0.5">
+                  @joshuachetla
+                </span>
+                <span className="text-[10px] text-slate-500 mt-0.5">
+                  Short sermon reels, scriptures & daily stories
+                </span>
+              </div>
+            </div>
+
+            <ExternalLink size={16} className="text-slate-400 group-hover:text-pink-400 transition-colors shrink-0 mr-1" />
+          </div>
         </div>
       </div>
     </div>

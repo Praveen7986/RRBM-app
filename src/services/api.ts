@@ -1,7 +1,7 @@
 // src/services/api.ts
 // Production HTTP API Client with Multi-Device Cloud/LAN Server Resolution & Offline Handling
 
-import { Volunteer, AlertEvent, ChatMessage, OfferingBalance } from '../types/volunteer';
+import { Volunteer, AlertEvent, ChatMessage, OfferingBalance, Expenditure } from '../types/volunteer';
 
 const STORAGE_KEY_SERVER_URL = 'rrbm_custom_server_url';
 const DEFAULT_FALLBACK_SERVER = 'https://rrbm-app-backend.onrender.com';
@@ -218,6 +218,46 @@ export const apiClient = {
     });
   },
 
+  // 9b. Spent Money (Expenditures)
+  async getExpenditures(): Promise<{ success: boolean; expenditures: Expenditure[] }> {
+    return fetchJson<{ success: boolean; expenditures: Expenditure[] }>('/api/spent');
+  },
+
+  async addExpenditure(
+    exp: { date: string; purpose: string; amount: number },
+    authTokenOrPin: string
+  ): Promise<{ success: boolean; expenditure: Expenditure; expenditures: Expenditure[] }> {
+    const headers: Record<string, string> = {};
+    if (authTokenOrPin && authTokenOrPin.length > 30) {
+      headers['Authorization'] = `Bearer ${authTokenOrPin}`;
+    } else {
+      headers['x-admin-pin'] = authTokenOrPin;
+    }
+
+    return fetchJson<{ success: boolean; expenditure: Expenditure; expenditures: Expenditure[] }>('/api/spent', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(exp)
+    });
+  },
+
+  async deleteExpenditure(
+    id: string,
+    authTokenOrPin: string
+  ): Promise<{ success: boolean; expenditures: Expenditure[] }> {
+    const headers: Record<string, string> = {};
+    if (authTokenOrPin && authTokenOrPin.length > 30) {
+      headers['Authorization'] = `Bearer ${authTokenOrPin}`;
+    } else {
+      headers['x-admin-pin'] = authTokenOrPin;
+    }
+
+    return fetchJson<{ success: boolean; expenditures: Expenditure[] }>(`/api/spent/${id}`, {
+      method: 'DELETE',
+      headers
+    });
+  },
+
   // 10. Manager Authentication
   async adminLogin(secretOrPin: string): Promise<{ success: boolean; token: string; customToken?: string | null; role?: string }> {
     return fetchJson<{ success: boolean; token: string; customToken?: string | null; role?: string }>('/api/admin/login', {
@@ -265,6 +305,26 @@ export const apiClient = {
         'Authorization': `Bearer ${adminIdToken}`
       },
       body: JSON.stringify({ volunteerId, newPassword })
+    });
+  },
+
+  // 10e. Update Volunteer Name
+  async updateVolunteerName(
+    volunteerId: string,
+    name: string,
+    authTokenOrPin: string
+  ): Promise<{ success: boolean; volunteer: Volunteer }> {
+    const headers: Record<string, string> = {};
+    if (authTokenOrPin && authTokenOrPin.length > 30) {
+      headers['Authorization'] = `Bearer ${authTokenOrPin}`;
+    } else {
+      headers['x-admin-pin'] = authTokenOrPin;
+    }
+
+    return fetchJson<{ success: boolean; volunteer: Volunteer }>('/api/admin/volunteers/update-name', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ volunteerId, name })
     });
   },
 

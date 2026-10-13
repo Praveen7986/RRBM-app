@@ -508,195 +508,90 @@ export const AlertScreen: React.FC = () => {
         )}
       </div>
 
-      {/* 4. RECIPIENTS Groups List */}
-      <div className="w-full flex flex-col space-y-2.5">
-        <div className="flex items-center justify-between px-0.5">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-            Recipients
-          </span>
-          <span className="text-[10px] font-semibold text-slate-400">
-            12 volunteers
-          </span>
-        </div>
-
-        {/* Group 1: Worship Team */}
-        <div 
-          className="clean-card w-full p-3.5 flex items-center justify-between"
-          style={{
-            background: '#101726',
-            border: '1px solid rgba(255, 255, 255, 0.08)'
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div 
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-300 shrink-0"
-              style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.08)'
-              }}
-            >
-              <Users size={16} />
-            </div>
-
-            <div className="flex flex-col">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-white">Worship Team</span>
-                <span className="text-[10px] text-slate-400">5 members</span>
-              </div>
-              <span className="text-[11px] text-slate-400 mt-0.5">
-                All available this weekend
-              </span>
-            </div>
-          </div>
-
-          <ChevronRight size={16} className="text-slate-400" />
-        </div>
-
-        {/* Group 2: Children's Ministry */}
-        <div 
-          className="clean-card w-full p-3.5 flex items-center justify-between"
-          style={{
-            background: '#101726',
-            border: '1px solid rgba(255, 255, 255, 0.08)'
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div 
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-300 shrink-0"
-              style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.08)'
-              }}
-            >
-              <Users size={16} />
-            </div>
-
-            <div className="flex flex-col">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-white">Children's Ministry</span>
-                <span className="text-[10px] text-slate-400">4 members</span>
-              </div>
-              <span className="text-[11px] text-slate-400 mt-0.5">
-                2 pending confirmation
-              </span>
-            </div>
-          </div>
-
-          <ChevronRight size={16} className="text-slate-400" />
-        </div>
-
-        {/* Group 3: Greeters & Ushers */}
-        <div 
-          className="clean-card w-full p-3.5 flex items-center justify-between"
-          style={{
-            background: '#101726',
-            border: '1px solid rgba(255, 255, 255, 0.08)'
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div 
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-300 shrink-0"
-              style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.08)'
-              }}
-            >
-              <Users size={16} />
-            </div>
-
-            <div className="flex flex-col">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-white">Greeters & Ushers</span>
-                <span className="text-[10px] text-slate-400">3 members</span>
-              </div>
-              <span className="text-[11px] text-slate-400 mt-0.5">
-                All confirmed
-              </span>
-            </div>
-          </div>
-
-          <ChevronRight size={16} className="text-slate-400" />
-        </div>
-      </div>
-
-      {/* 5. Live Coordination Chat Drawer */}
+      {/* 4. Live Coordination Chat (Directly Open Below Alert Button) */}
       <div 
-        className="clean-card w-full p-3.5 flex flex-col space-y-2.5"
+        className="clean-card w-full p-4 flex flex-col space-y-3"
         style={{
           background: '#101726',
           border: '1px solid rgba(255, 255, 255, 0.08)'
         }}
       >
-        <button
-          type="button"
-          onClick={() => setShowLiveChat(!showLiveChat)}
-          className="flex items-center justify-between w-full cursor-pointer"
-        >
+        <div className="flex items-center justify-between w-full border-b border-slate-800/80 pb-2.5">
           <div className="flex items-center gap-2">
-            <MessageSquare size={15} className="text-sky-400" />
-            <span className="text-xs font-bold text-white">Live Coordination Chat</span>
-            <span className="text-[10px] font-mono text-slate-400">({chatMessages.length})</span>
+            <MessageSquare size={16} className="text-sky-400" />
+            <span className="text-sm font-bold text-white">Live Volunteer Chat</span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 font-bold">
+              {chatMessages.length} {chatMessages.length === 1 ? 'message' : 'messages'}
+            </span>
           </div>
 
-          <span className="text-xs text-sky-400 font-semibold">
-            {showLiveChat ? 'Hide' : 'Open'}
+          <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            Live Sync
           </span>
-        </button>
+        </div>
 
-        {showLiveChat && (
-          <div className="w-full flex flex-col space-y-2 pt-2 border-t border-slate-800">
-            <div className="w-full max-h-48 overflow-y-auto space-y-2 pr-1">
-              {chatMessages.length === 0 ? (
-                <div className="text-center py-4 text-[11px] text-slate-400">
-                  No coordination messages yet.
-                </div>
-              ) : (
-                chatMessages.map((msg) => {
-                  const isMe = msg.volunteerId === currentVolunteer.id;
-                  return (
-                    <div 
-                      key={msg.id} 
-                      className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
-                    >
-                      <span className="text-[9px] text-slate-400 font-medium px-1">
-                        {msg.senderName} &bull; {msg.volunteerId}
-                      </span>
-                      <div 
-                        className={`p-2 rounded-xl text-xs max-w-[85%] mt-0.5 ${
-                          isMe 
-                            ? 'bg-sky-600 text-white rounded-tr-none' 
-                            : 'bg-slate-800 text-slate-200 rounded-tl-none'
-                        }`}
-                      >
-                        {msg.text}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-              <div ref={chatEndRef} />
+        {/* Chat Messages Stream */}
+        <div className="w-full max-h-64 sm:max-h-72 overflow-y-auto space-y-2.5 pr-1">
+          {chatMessages.length === 0 ? (
+            <div className="text-center py-6 text-xs text-slate-400">
+              No coordination messages yet. Be the first to send a message!
             </div>
+          ) : (
+            chatMessages.map((msg) => {
+              const isMe = msg.volunteerId === currentVolunteer.id;
+              return (
+                <div 
+                  key={msg.id} 
+                  className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                >
+                  <div className="flex items-center gap-1.5 text-[9.5px] text-slate-400 font-medium px-1">
+                    <span className="font-semibold text-slate-300">{msg.senderName}</span>
+                    <span>&bull;</span>
+                    <span className="font-mono text-slate-500">ID: {msg.volunteerId}</span>
+                    {msg.time && (
+                      <>
+                        <span>&bull;</span>
+                        <span className="text-slate-500">{msg.time}</span>
+                      </>
+                    )}
+                  </div>
+                  <div 
+                    className={`p-2.5 rounded-2xl text-xs max-w-[85%] mt-0.5 leading-relaxed shadow-sm ${
+                      isMe 
+                        ? 'bg-sky-600 text-white rounded-tr-none' 
+                        : 'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700/60'
+                    }`}
+                  >
+                    {msg.text}
+                  </div>
+                </div>
+              );
+            })
+          )}
+          <div ref={chatEndRef} />
+        </div>
 
-            <form onSubmit={handleSendChatMessage} className="flex items-center gap-2 pt-1">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Type coordination message..."
-                className="flex-1 py-2 px-3 rounded-xl text-xs text-white placeholder-slate-500"
-                style={{ background: '#070D1D', border: '1px solid rgba(56, 189, 248, 0.2)' }}
-              />
-              <button
-                type="submit"
-                disabled={isSendingMessage || !chatInput.trim()}
-                className="p-2 rounded-xl text-white cursor-pointer"
-                style={{ background: '#0284C7' }}
-              >
-                <Send size={14} />
-              </button>
-            </form>
-          </div>
-        )}
+        {/* Message Input Bar */}
+        <form onSubmit={handleSendChatMessage} className="flex items-center gap-2 pt-1 border-t border-slate-800/80">
+          <input
+            type="text"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            placeholder="Type coordination message to all volunteers..."
+            className="flex-1 py-2.5 px-3.5 rounded-xl text-xs text-white placeholder-slate-500 outline-none"
+            style={{ background: '#070D1D', border: '1px solid rgba(56, 189, 248, 0.25)' }}
+          />
+          <button
+            type="submit"
+            disabled={isSendingMessage || !chatInput.trim()}
+            className="py-2.5 px-4 rounded-xl text-white font-bold text-xs cursor-pointer disabled:opacity-40 transition-all flex items-center gap-1.5"
+            style={{ background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)' }}
+          >
+            <span>Send</span>
+            <Send size={13} />
+          </button>
+        </form>
       </div>
 
       {/* 6. Management Desk Access Trigger */}

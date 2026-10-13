@@ -1,7 +1,7 @@
 // src/services/realtimeStore.ts
 // Production Realtime Store with Firebase Cloud Firestore (Internet-Wide) & Node.js/WebSocket LAN Fallback
 
-import { Volunteer, AlertEvent, ChatMessage, OfferingBalance, ConnectionStatus } from '../types/volunteer';
+import { Volunteer, AlertEvent, ChatMessage, OfferingBalance, ConnectionStatus, Expenditure } from '../types/volunteer';
 import { triggerAlertSoundAndVibration, triggerChatNotification } from './audioNotification';
 import { apiClient, getServerBaseUrl, setCustomServerUrl } from './api';
 import { firebaseRealtime } from './firebaseRealtimeService';
@@ -12,10 +12,17 @@ const STORAGE_KEYS = {
   CURRENT_VOLUNTEER: 'rrbm_volunteer_user_2026',
   CHAT_MESSAGES: 'rrbm_live_chat_messages_2026',
   ACTIVE_ALERT: 'rrbm_active_alert_2026',
-  OFFERING_BALANCE: 'rrbm_festival_balance_2026'
+  OFFERING_BALANCE: 'rrbm_festival_balance_2026',
+  EXPENDITURES: 'rrbm_expenditures_2026'
 };
 
 const BROADCAST_CHANNEL_NAME = 'rrbm_alert_realtime_channel_2026';
+
+const INITIAL_EXPENDITURES: Expenditure[] = [
+  { id: 'EXP_1', date: '2026-10-20', purpose: 'Sound & Tent arrangement', amount: 25000, createdAt: '2026-10-20T10:00:00.000Z' },
+  { id: 'EXP_2', date: '2026-10-21', purpose: 'Food & Refreshments for volunteers', amount: 18500, createdAt: '2026-10-21T12:30:00.000Z' },
+  { id: 'EXP_3', date: '2026-10-22', purpose: 'Stage lighting and flower decoration', amount: 12000, createdAt: '2026-10-22T08:00:00.000Z' }
+];
 
 const INITIAL_CHAT: ChatMessage[] = [
   {
@@ -49,6 +56,7 @@ class RealtimeStoreService {
     updatedBy: 'Festival Coordination Desk',
     updatedAt: new Date().toISOString()
   };
+  private expenditures: Expenditure[] = [];
   private connectionStatus: ConnectionStatus = 'connecting';
   private reconnectTimer: any = null;
   private heartbeatTimer: any = null;
@@ -184,6 +192,18 @@ class RealtimeStoreService {
       } catch {
         // use default
       }
+    }
+
+    // Load Expenditures
+    const savedExp = localStorage.getItem(STORAGE_KEYS.EXPENDITURES);
+    if (savedExp) {
+      try {
+        this.expenditures = JSON.parse(savedExp);
+      } catch {
+        this.expenditures = INITIAL_EXPENDITURES;
+      }
+    } else {
+      this.expenditures = INITIAL_EXPENDITURES;
     }
   }
 
@@ -341,10 +361,11 @@ class RealtimeStoreService {
     if (this.isCloudFirebaseMode) return;
 
     try {
-      const [alertRes, chatRes, balanceRes] = await Promise.allSettled([
+      const [alertRes, chatRes, balanceRes, expRes] = await Promise.allSettled([
         apiClient.getActiveAlert(),
         apiClient.getChatMessages(),
-        apiClient.getOfferingBalance()
+        apiClient.getOfferingBalance(),
+        apiClient.getExpenditures()
       ]);
 
       if (alertRes.status === 'fulfilled' && alertRes.value.success) {
@@ -360,6 +381,11 @@ class RealtimeStoreService {
       if (balanceRes.status === 'fulfilled' && balanceRes.value.success && balanceRes.value.balance) {
         this.offeringBalance = balanceRes.value.balance;
         localStorage.setItem(STORAGE_KEYS.OFFERING_BALANCE, JSON.stringify(this.offeringBalance));
+      }
+
+      if (expRes.status === 'fulfilled' && expRes.value.success && expRes.value.expenditures) {
+        this.expenditures = expRes.value.expenditures;
+        localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(this.expenditures));
       }
 
       this.notify();
@@ -383,6 +409,10 @@ class RealtimeStoreService {
       if (payload.offeringBalance) {
         this.offeringBalance = payload.offeringBalance;
         localStorage.setItem(STORAGE_KEYS.OFFERING_BALANCE, JSON.stringify(this.offeringBalance));
+      }
+      if (payload.expenditures && Array.isArray(payload.expenditures)) {
+        this.expenditures = payload.expenditures;
+        localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(this.expenditures));
       }
       this.notify();
       return;
@@ -434,6 +464,16 @@ class RealtimeStoreService {
     } else if (type === 'BALANCE_UPDATED') {
       this.offeringBalance = payload;
       localStorage.setItem(STORAGE_KEYS.OFFERING_BALANCE, JSON.stringify(payload));
+      this.notify();
+    } else if (type === 'EXPENDITURES_UPDATED') {
+      this.expenditures = Array.isArray(payload) ? payload : [];
+      localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(this.expenditures));
+      this.notify();
+    } else if (type === 'VOLUNTEER_NAME_UPDATED') {
+      if (payload && payload.id && this.currentVolunteer && this.currentVolunteer.id === payload.id) {
+        this.currentVolunteer.name = payload.name;
+        localStorage.setItem(STORAGE_KEYS.CURRENT_VOLUNTEER, JSON.stringify(this.currentVolunteer));
+      }
       this.notify();
     }
 
@@ -756,6 +796,45 @@ class RealtimeStoreService {
 
   public getOfferingBalance(): OfferingBalance {
     return this.offeringBalance;
+  }
+
+  public getExpenditures(): Expenditure[] {
+    return [...this.expenditures];
+  }
+
+  public async addExpenditure(date: string, purpose: string, amount: number, adminPin: string): Promise<Expenditure[]> {
+    const res = await apiClient.addExpenditure({ date, purpose, amount }, adminPin);
+    if (res.success && res.expenditures) {
+      this.expenditures = res.expenditures;
+      localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(this.expenditures));
+      this.notify();
+      return this.expenditures;
+    }
+    throw new Error((res as any).message || 'Failed to save expenditure');
+  }
+
+  public async deleteExpenditure(id: string, adminPin: string): Promise<Expenditure[]> {
+    const res = await apiClient.deleteExpenditure(id, adminPin);
+    if (res.success && res.expenditures) {
+      this.expenditures = res.expenditures;
+      localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(this.expenditures));
+      this.notify();
+      return this.expenditures;
+    }
+    throw new Error((res as any).message || 'Failed to delete expenditure');
+  }
+
+  public async updateVolunteerName(volunteerId: string, name: string, adminPin: string): Promise<boolean> {
+    const res = await apiClient.updateVolunteerName(volunteerId, name, adminPin);
+    if (res.success) {
+      if (this.currentVolunteer && this.currentVolunteer.id === volunteerId) {
+        this.currentVolunteer.name = name;
+        localStorage.setItem(STORAGE_KEYS.CURRENT_VOLUNTEER, JSON.stringify(this.currentVolunteer));
+      }
+      this.notify();
+      return true;
+    }
+    throw new Error((res as any).message || 'Failed to update volunteer name');
   }
 
   public getConnectionStatus(): ConnectionStatus {

@@ -1,426 +1,445 @@
 // src/screens/SongsScreen.tsx
-// Screen 3: Praise & Worship Songs Matching Reference Image
-// 3-Day Tabs, Category Metadata, Independent Scrolling & Docked Now Playing Panel
+// Screen 3: Worship Song Lyrics Book & Festival Hymnal
+// Designed for reading and singing along during RRBM 3-Day Fasting Prayers 2026
+// Features: Day Filtering, Category Filter, Search, Font Size Zoom, Language Toggle (English/Telugu) & Full Lyrics View
 
 import React, { useState } from 'react';
 import { 
-  Music, 
+  BookOpen, 
   Search, 
   X, 
-  Play, 
-  Pause, 
-  SkipBack, 
-  SkipForward, 
-  Shuffle, 
-  Volume2,
-  BookOpen,
-  ChevronRight
+  ChevronRight, 
+  Copy, 
+  Check, 
+  ZoomIn, 
+  ZoomOut, 
+  ArrowLeft,
+  Music2,
+  Sparkles,
+  SlidersHorizontal,
+  Bookmark
 } from 'lucide-react';
 import { SONGS_DATA, SongItem } from '../data/songsData';
 
 export const SongsScreen: React.FC = () => {
-  const [activeDay, setActiveDay] = useState<'day1' | 'day2' | 'day3'>('day2');
+  const [activeDay, setActiveDay] = useState<'all' | 'day1' | 'day2' | 'day3'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [showSearch, setShowSearch] = useState<boolean>(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedSong, setSelectedSong] = useState<SongItem | null>(null);
+  
+  // Lyrics Reader State
+  const [lyricsLanguage, setLyricsLanguage] = useState<'english' | 'telugu'>('english');
+  const [fontSize, setFontSize] = useState<number>(15);
+  const [copied, setCopied] = useState<boolean>(false);
 
-  // Playback state
-  const [nowPlayingSong, setNowPlayingSong] = useState<SongItem | null>(() => {
-    const d2 = SONGS_DATA.day2;
-    return d2.find(s => s.title.includes('Holy Spirit') || s.id === 's3') || d2[0] || SONGS_DATA.day1[0];
-  });
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  // Collect all songs across all days
+  const allSongsList: SongItem[] = [
+    ...SONGS_DATA.day1,
+    ...SONGS_DATA.day2,
+    ...SONGS_DATA.day3
+  ];
 
-  const currentDaySongs = SONGS_DATA[activeDay] || [];
-  const filteredSongs = currentDaySongs.filter((song) => {
+  // Unique categories
+  const categories = ['All', 'Opening Praise', 'Deep Worship', 'Holy Spirit', 'Consecration', 'Thanksgiving'];
+
+  // Current day filtered songs
+  const daySongs = activeDay === 'all' ? allSongsList : (SONGS_DATA[activeDay] || []);
+
+  // Search and category filtered songs
+  const filteredSongs = daySongs.filter((song) => {
+    // Category filter
+    if (selectedCategory !== 'All' && !song.category.toLowerCase().includes(selectedCategory.toLowerCase())) {
+      return false;
+    }
+
+    // Search query filter
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return (
       song.title.toLowerCase().includes(q) ||
       song.sub.toLowerCase().includes(q) ||
+      song.key.toLowerCase().includes(q) ||
       song.category.toLowerCase().includes(q) ||
-      (song.lyrics && song.lyrics.toLowerCase().includes(q))
+      (song.lyrics && song.lyrics.toLowerCase().includes(q)) ||
+      (song.teluguLyrics && song.teluguLyrics.toLowerCase().includes(q))
     );
   });
 
-  const handlePlayToggle = (song?: SongItem) => {
-    if (song) {
-      if (nowPlayingSong?.id === song.id) {
-        setIsPlaying(!isPlaying);
-      } else {
-        setNowPlayingSong(song);
-        setIsPlaying(true);
-      }
-    } else {
-      setIsPlaying(!isPlaying);
-    }
+  const handleCopyLyrics = (song: SongItem) => {
+    const textToCopy = (lyricsLanguage === 'telugu' && song.teluguLyrics) ? song.teluguLyrics : song.lyrics;
+    navigator.clipboard.writeText(`${song.title}\nScale: ${song.key}\n\n${textToCopy}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleNextSong = () => {
-    if (!nowPlayingSong) return;
-    const currentIndex = currentDaySongs.findIndex(s => s.id === nowPlayingSong.id);
-    if (currentIndex !== -1 && currentIndex < currentDaySongs.length - 1) {
-      setNowPlayingSong(currentDaySongs[currentIndex + 1]);
-      setIsPlaying(true);
-    } else if (currentDaySongs.length > 0) {
-      setNowPlayingSong(currentDaySongs[0]);
-      setIsPlaying(true);
-    }
+  const increaseFontSize = () => {
+    setFontSize(prev => Math.min(prev + 2, 24));
   };
 
-  const handlePrevSong = () => {
-    if (!nowPlayingSong) return;
-    const currentIndex = currentDaySongs.findIndex(s => s.id === nowPlayingSong.id);
-    if (currentIndex > 0) {
-      setNowPlayingSong(currentDaySongs[currentIndex - 1]);
-      setIsPlaying(true);
-    } else if (currentDaySongs.length > 0) {
-      setNowPlayingSong(currentDaySongs[currentDaySongs.length - 1]);
-      setIsPlaying(true);
-    }
+  const decreaseFontSize = () => {
+    setFontSize(prev => Math.max(prev - 2, 12));
   };
 
-  const handleShuffle = () => {
-    if (currentDaySongs.length > 0) {
-      const randomIndex = Math.floor(Math.random() * currentDaySongs.length);
-      setNowPlayingSong(currentDaySongs[randomIndex]);
-      setIsPlaying(true);
-    }
-  };
+  // -------------------------------------------------------------
+  // Full-Screen Lyrics Reader Overlay
+  // -------------------------------------------------------------
+  if (selectedSong) {
+    const hasTelugu = Boolean(selectedSong.teluguLyrics && selectedSong.teluguLyrics.trim());
+    const currentLyrics = (lyricsLanguage === 'telugu' && hasTelugu) 
+      ? selectedSong.teluguLyrics! 
+      : selectedSong.lyrics;
 
-  const getDayLabel = () => {
-    switch (activeDay) {
-      case 'day1': return 'Day 1 - Tuesday, Oct 20';
-      case 'day2': return 'Day 2 - Wednesday, Oct 21';
-      case 'day3': return 'Day 3 - Thursday, Oct 22';
-    }
-  };
-
-  return (
-    <div className="songs-screen flex flex-col w-full space-y-3 pb-24 select-none relative max-w-4xl mx-auto">
-      {/* 1. Header with Screen Title & Search Icon */}
-      <div className="w-full flex items-center justify-between pt-1">
-        <div className="flex flex-col">
-          <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
-            Praise & Worship - Revival Fast 2026
-          </span>
-          <h1 className="text-2xl font-black text-white tracking-tight mt-0.5">
-            Songs
-          </h1>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setShowSearch(!showSearch)}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-slate-300 hover:text-white cursor-pointer transition-colors"
+    return (
+      <div className="fixed inset-0 z-50 bg-[#070D1D] flex flex-col overflow-hidden select-text text-white">
+        {/* Top Sticky Header */}
+        <div 
+          className="w-full px-4 py-3 border-b flex items-center justify-between shrink-0"
           style={{
-            background: 'rgba(255, 255, 255, 0.05)',
-            border: '1px solid rgba(255, 255, 255, 0.08)'
+            background: 'rgba(16, 23, 38, 0.95)',
+            borderColor: 'rgba(56, 189, 248, 0.2)',
+            backdropFilter: 'blur(16px)'
           }}
-          aria-label="Search songs"
         >
-          <Search size={15} />
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => setSelectedSong(null)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-sky-400 text-xs font-bold cursor-pointer transition-all active:scale-95"
+          >
+            <ArrowLeft size={15} />
+            <span>Back to Songs</span>
+          </button>
 
-      {/* Search Input Bar (Expandable) */}
-      {showSearch && (
-        <div className="w-full relative">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by title, lyrics, key or category..."
-            className="w-full py-2 pl-8 pr-8 rounded-xl text-xs text-white placeholder-slate-500 outline-none"
-            style={{ background: '#0D1527', border: '1px solid rgba(56, 189, 248, 0.25)' }}
-            autoFocus
-          />
-          <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
-          {searchQuery && (
+          {/* Controls: Zoom & Copy */}
+          <div className="flex items-center gap-2">
+            {/* Font Size Adjusters */}
+            <div className="flex items-center rounded-xl bg-slate-900 border border-slate-700/60 p-0.5">
+              <button
+                type="button"
+                onClick={decreaseFontSize}
+                disabled={fontSize <= 12}
+                className="p-1.5 text-slate-300 hover:text-white disabled:opacity-30 cursor-pointer"
+                title="Decrease font size"
+              >
+                <ZoomOut size={14} />
+              </button>
+              <span className="text-[10px] font-mono font-bold text-slate-400 px-1 select-none">
+                {fontSize}px
+              </span>
+              <button
+                type="button"
+                onClick={increaseFontSize}
+                disabled={fontSize >= 24}
+                className="p-1.5 text-slate-300 hover:text-white disabled:opacity-30 cursor-pointer"
+                title="Increase font size"
+              >
+                <ZoomIn size={14} />
+              </button>
+            </div>
+
+            {/* Copy Button */}
             <button
               type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white cursor-pointer"
+              onClick={() => handleCopyLyrics(selectedSong)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold cursor-pointer transition-all active:scale-95"
+              title="Copy lyrics to clipboard"
             >
-              <X size={14} />
+              {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+              <span className="hidden sm:inline">{copied ? 'Copied' : 'Copy'}</span>
             </button>
-          )}
+          </div>
         </div>
-      )}
 
-      {/* 2. 3-Day Selection Tabs Matching Reference Screen */}
-      <div className="w-full grid grid-cols-3 gap-2">
+        {/* Scrollable Lyrics Body */}
+        <div className="flex-1 overflow-y-auto px-4 py-5 max-w-3xl mx-auto w-full space-y-4">
+          {/* Song Header Info Card */}
+          <div 
+            className="p-5 rounded-2xl flex flex-col space-y-3"
+            style={{
+              background: '#101726',
+              border: '1px solid rgba(56, 189, 248, 0.25)',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)'
+            }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400 block mb-1">
+                  {selectedSong.category} &bull; {selectedSong.day.toUpperCase()}
+                </span>
+                <h1 className="text-xl sm:text-2xl font-black text-white leading-tight">
+                  {selectedSong.title}
+                </h1>
+                <p className="text-xs text-slate-400 mt-1">
+                  {selectedSong.sub}
+                </p>
+              </div>
+
+              <div className="flex flex-col items-end shrink-0 gap-1.5">
+                <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  {selectedSong.key}
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {selectedSong.tempo}
+                </span>
+              </div>
+            </div>
+
+            {/* Theme Verse */}
+            {selectedSong.themeVerse && (
+              <div className="p-2.5 rounded-xl bg-sky-950/40 border border-sky-500/20 text-xs text-sky-200/90 italic flex items-center gap-2">
+                <Bookmark size={14} className="text-sky-400 shrink-0" />
+                <span>{selectedSong.themeVerse}</span>
+              </div>
+            )}
+
+            {/* Language Selector if Telugu Available */}
+            {hasTelugu && (
+              <div className="flex items-center gap-2 pt-1 border-t border-slate-800">
+                <span className="text-[11px] font-bold text-slate-400">Language:</span>
+                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-900 border border-slate-700/60">
+                  <button
+                    type="button"
+                    onClick={() => setLyricsLanguage('english')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      lyricsLanguage === 'english'
+                        ? 'bg-sky-500 text-slate-950 shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    English
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLyricsLanguage('telugu')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      lyricsLanguage === 'telugu'
+                        ? 'bg-sky-500 text-slate-950 shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    తెలుగు (Telugu)
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Formatted Lyrics Verses Card */}
+          <div 
+            className="p-6 rounded-2xl space-y-4"
+            style={{
+              background: '#101726',
+              border: '1px solid rgba(255, 255, 255, 0.08)'
+            }}
+          >
+            <div 
+              className="leading-relaxed font-normal whitespace-pre-wrap select-text text-slate-200"
+              style={{ fontSize: `${fontSize}px`, lineHeight: 1.7 }}
+            >
+              {currentLyrics}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // Main Songs Hymnal Screen
+  // -------------------------------------------------------------
+  return (
+    <div className="songs-screen flex flex-col w-full space-y-4 pb-6 select-none max-w-4xl mx-auto">
+      {/* 1. Header with Screen Title & Search */}
+      <div className="w-full flex items-start justify-between pt-1">
+        <div className="flex flex-col">
+          <div className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-sky-400 uppercase tracking-widest mb-1">
+            <Sparkles size={13} className="text-sky-400" />
+            <span>RRBM 3-Day Fasting Prayers 2026 Hymnal</span>
+          </div>
+
+          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
+            Worship Songs & Lyrics
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-xl">
+            Complete lyrics and musical scales for all festival worship sessions
+          </p>
+        </div>
+
+        <div className="w-10 h-10 rounded-2xl bg-[#101726] border border-white/10 flex items-center justify-center text-sky-400 shrink-0">
+          <Music2 size={19} />
+        </div>
+      </div>
+
+      {/* 2. Search Bar */}
+      <div className="w-full relative flex items-center">
+        <div className="absolute left-3.5 text-sky-400 pointer-events-none">
+          <Search size={16} />
+        </div>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search by song title, lyric words, or scale key (e.g. G Major)..."
+          className="w-full py-2.5 pl-10 pr-9 rounded-2xl text-xs text-white placeholder-slate-500 outline-none transition-all shadow-md"
+          style={{ background: '#101726', border: '1px solid rgba(56, 189, 248, 0.25)' }}
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3 text-slate-400 hover:text-white cursor-pointer"
+          >
+            <X size={15} />
+          </button>
+        )}
+      </div>
+
+      {/* 3. Day Selector Tabs */}
+      <div className="w-full flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        <button
+          type="button"
+          onClick={() => setActiveDay('all')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+            activeDay === 'all'
+              ? 'bg-sky-500 text-slate-950 shadow-md'
+              : 'bg-[#101726] text-slate-300 hover:text-white border border-white/10'
+          }`}
+        >
+          All Songs ({allSongsList.length})
+        </button>
+
         <button
           type="button"
           onClick={() => setActiveDay('day1')}
-          className={`py-2 px-1 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all ${
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
             activeDay === 'day1'
-              ? 'border border-sky-400/80 bg-[#101B33]'
-              : 'border border-white/5 bg-[#101726] text-slate-400'
+              ? 'bg-sky-500 text-slate-950 shadow-md'
+              : 'bg-[#101726] text-slate-300 hover:text-white border border-white/10'
           }`}
         >
-          <span className={`text-xs font-bold ${activeDay === 'day1' ? 'text-white' : 'text-slate-300'}`}>
-            Day 1
-          </span>
-          <span className="text-[10px] text-slate-400 mt-0.5">
-            Oct 20
-          </span>
+          Day 1 (Oct 20)
         </button>
 
         <button
           type="button"
           onClick={() => setActiveDay('day2')}
-          className={`py-2 px-1 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all ${
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
             activeDay === 'day2'
-              ? 'border border-sky-400/80 bg-[#101B33]'
-              : 'border border-white/5 bg-[#101726] text-slate-400'
+              ? 'bg-sky-500 text-slate-950 shadow-md'
+              : 'bg-[#101726] text-slate-300 hover:text-white border border-white/10'
           }`}
         >
-          <span className={`text-xs font-bold ${activeDay === 'day2' ? 'text-white' : 'text-slate-300'}`}>
-            Day 2
-          </span>
-          <span className="text-[10px] text-slate-400 mt-0.5">
-            Oct 21
-          </span>
+          Day 2 (Oct 21)
         </button>
 
         <button
           type="button"
           onClick={() => setActiveDay('day3')}
-          className={`py-2 px-1 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all ${
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
             activeDay === 'day3'
-              ? 'border border-sky-400/80 bg-[#101B33]'
-              : 'border border-white/5 bg-[#101726] text-slate-400'
+              ? 'bg-sky-500 text-slate-950 shadow-md'
+              : 'bg-[#101726] text-slate-300 hover:text-white border border-white/10'
           }`}
         >
-          <span className={`text-xs font-bold ${activeDay === 'day3' ? 'text-white' : 'text-slate-300'}`}>
-            Day 3
-          </span>
-          <span className="text-[10px] text-slate-400 mt-0.5">
-            Oct 22
-          </span>
+          Day 3 (Oct 22)
         </button>
       </div>
 
-      {/* 3. Section Subheader with Category, Total Count and Shuffle */}
-      <div className="w-full flex items-end justify-between pt-1">
-        <div className="flex flex-col">
-          <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
-            {activeDay === 'day2' ? 'INTERCESSION' : activeDay === 'day1' ? 'CONSECRATION' : 'REVIVAL RELEASE'}
-          </span>
-          <span className="text-xs font-bold text-white mt-0.5">
-            {getDayLabel()}
-          </span>
-          <span className="text-[11px] text-slate-400 mt-0.5">
-            {filteredSongs.length} songs &bull; 30:58 total
-          </span>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleShuffle}
-          className="flex items-center gap-1.5 text-xs font-semibold text-sky-400 hover:text-sky-300 cursor-pointer pb-0.5"
-        >
-          <Shuffle size={13} />
-          <span>Shuffle</span>
-        </button>
+      {/* 4. Category Filter Pills */}
+      <div className="w-full flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px]">
+        {categories.map((cat) => (
+          <button
+            key={cat}
+            type="button"
+            onClick={() => setSelectedCategory(cat)}
+            className={`px-3 py-1 rounded-lg font-semibold transition-all shrink-0 cursor-pointer ${
+              selectedCategory === cat
+                ? 'bg-slate-700 text-sky-300 border border-sky-400/40 shadow-sm'
+                : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
       </div>
 
-      {/* 4. Scrollable Song List Items */}
-      <div className="w-full flex flex-col space-y-2 pt-1">
-        {filteredSongs.map((song) => {
-          const isThisPlaying = nowPlayingSong?.id === song.id && isPlaying;
-
-          return (
+      {/* 5. Songs List */}
+      <div className="w-full space-y-2.5 pt-1">
+        {filteredSongs.length === 0 ? (
+          <div 
+            className="p-8 rounded-2xl text-center space-y-2"
+            style={{ background: '#101726', border: '1px solid rgba(255, 255, 255, 0.08)' }}
+          >
+            <BookOpen size={28} className="text-slate-500 mx-auto" />
+            <h3 className="text-sm font-bold text-white">No songs found</h3>
+            <p className="text-xs text-slate-400 max-w-xs mx-auto">
+              Try adjusting your search query or switching to All Songs.
+            </p>
+          </div>
+        ) : (
+          filteredSongs.map((song, index) => (
             <div
               key={song.id}
-              onClick={() => handlePlayToggle(song)}
-              className="w-full rounded-2xl p-3 flex items-center justify-between cursor-pointer transition-all active:scale-[0.99]"
+              onClick={() => {
+                setSelectedSong(song);
+                setLyricsLanguage('english');
+              }}
+              className="p-4 rounded-2xl flex items-center justify-between cursor-pointer transition-all hover:scale-[1.006] active:scale-[0.99] group shadow-md"
               style={{
                 background: '#101726',
-                border: nowPlayingSong?.id === song.id ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid rgba(255, 255, 255, 0.05)',
-                boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)'
+                border: '1px solid rgba(255, 255, 255, 0.08)'
               }}
             >
-              <div className="flex items-center gap-3 overflow-hidden">
+              <div className="flex items-center gap-3.5 overflow-hidden">
+                {/* Song Index Badge */}
                 <div 
-                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-mono font-black text-xs"
                   style={{
-                    background: nowPlayingSong?.id === song.id ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                    color: nowPlayingSong?.id === song.id ? '#38BDF8' : '#94A3B8'
+                    background: 'rgba(56, 189, 248, 0.12)',
+                    border: '1px solid rgba(56, 189, 248, 0.28)',
+                    color: '#38BDF8'
                   }}
                 >
-                  <Music size={16} />
+                  {String(index + 1).padStart(2, '0')}
                 </div>
 
                 <div className="flex flex-col overflow-hidden">
-                  <span className={`text-xs font-bold truncate ${nowPlayingSong?.id === song.id ? 'text-sky-400' : 'text-white'}`}>
-                    {song.title}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-white group-hover:text-sky-400 transition-colors truncate">
+                      {song.title}
+                    </span>
+                  </div>
+
+                  <span className="text-xs text-slate-400 truncate mt-0.5">
+                    {song.sub}
                   </span>
-                  <span className="text-[10px] text-slate-400 truncate mt-0.5">
-                    {song.sub} &bull; {song.key}
-                  </span>
+
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className="px-2 py-0.5 rounded-full text-[9.5px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                      {song.key}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[9.5px] font-semibold bg-slate-800 text-slate-300 border border-slate-700/60">
+                      {song.category}
+                    </span>
+                    {song.teluguLyrics && (
+                      <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-sky-500/15 text-sky-300">
+                        తెలుగు
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Right: Duration & Category Badge */}
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[10px] font-mono text-slate-400">
-                  {song.time.includes('AM') || song.time.includes('PM') ? '5:12' : song.time}
+              {/* Read Lyrics Action Pill */}
+              <div className="flex items-center gap-2 shrink-0 ml-3">
+                <span className="text-xs font-bold text-sky-400 group-hover:underline hidden sm:inline">
+                  Lyrics
                 </span>
-
-                <span 
-                  className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.06)',
-                    color: '#CBD5E1',
-                    border: '1px solid rgba(255, 255, 255, 0.08)'
-                  }}
-                >
-                  {song.category.split(' ')[0]}
-                </span>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedSong(song);
-                  }}
-                  className="p-1 text-slate-500 hover:text-white"
-                  title="View lyrics"
-                >
-                  <ChevronRight size={14} />
-                </button>
+                <ChevronRight size={16} className="text-slate-400 group-hover:text-sky-400 transition-colors" />
               </div>
             </div>
-          );
-        })}
+          ))
+        )}
       </div>
-
-      {/* 5. Docked Bottom "NOW PLAYING" Panel (Matching Reference Screen 3) */}
-      {nowPlayingSong && (
-        <div className="now-playing-dock">
-          <div 
-            className="w-full rounded-2xl p-3 flex items-center justify-between shadow-2xl"
-            style={{
-              background: '#0D1629',
-              border: '1px solid rgba(56, 189, 248, 0.3)',
-              boxShadow: '0 8px 30px rgba(0, 0, 0, 0.7)'
-            }}
-          >
-            <div 
-              className="flex items-center gap-2.5 overflow-hidden flex-1 cursor-pointer"
-              onClick={() => setSelectedSong(nowPlayingSong)}
-            >
-              <div 
-                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8' }}
-              >
-                <Volume2 size={16} className={isPlaying ? 'animate-pulse' : ''} />
-              </div>
-
-              <div className="flex flex-col overflow-hidden">
-                <span className="text-[9px] font-bold text-sky-400 uppercase tracking-wider">
-                  Now Playing
-                </span>
-                <span className="text-xs font-bold text-white truncate leading-tight">
-                  {nowPlayingSong.title}
-                </span>
-                <span className="text-[9.5px] text-slate-400 truncate leading-none mt-0.5">
-                  {nowPlayingSong.sub} &bull; {nowPlayingSong.key}
-                </span>
-              </div>
-            </div>
-
-            {/* Audio Controls */}
-            <div className="flex items-center gap-1.5 shrink-0 ml-2">
-              <button
-                type="button"
-                onClick={handlePrevSong}
-                className="p-1.5 text-slate-300 hover:text-white cursor-pointer active:scale-95"
-                aria-label="Previous song"
-              >
-                <SkipBack size={16} />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handlePlayToggle()}
-                className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-transform active:scale-95"
-                style={{
-                  background: '#0284C7',
-                  color: '#FFFFFF',
-                  boxShadow: '0 2px 10px rgba(2, 132, 199, 0.5)'
-                }}
-                aria-label={isPlaying ? 'Pause' : 'Play'}
-              >
-                {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleNextSong}
-                className="p-1.5 text-slate-300 hover:text-white cursor-pointer active:scale-95"
-                aria-label="Next song"
-              >
-                <SkipForward size={16} />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 6. Full Lyrics Modal */}
-      {selectedSong && (
-        <div 
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" 
-          style={{ background: 'rgba(0, 0, 0, 0.85)', backdropFilter: 'blur(8px)' }}
-        >
-          <div 
-            className="w-full max-w-md max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col p-4 space-y-3 overflow-hidden" 
-            style={{ 
-              background: '#0E172C', 
-              border: '1px solid rgba(56, 189, 248, 0.25)', 
-              boxShadow: '0 20px 50px rgba(0,0,0,0.8)' 
-            }}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between pb-2 border-b border-slate-700">
-              <div className="flex flex-col">
-                <h3 className="text-sm font-black text-white">{selectedSong.title}</h3>
-                <span className="text-xs font-bold text-amber-400">{selectedSong.sub}</span>
-                {selectedSong.themeVerse && (
-                  <span className="text-[10px] text-sky-300/80 italic mt-0.5">{selectedSong.themeVerse}</span>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setSelectedSong(null)}
-                className="p-1.5 rounded-full text-slate-400 hover:text-white cursor-pointer"
-                style={{ background: 'rgba(255,255,255,0.1)' }}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Lyrics Content */}
-            <div className="flex-1 overflow-y-auto pr-1 text-xs leading-relaxed text-slate-200 whitespace-pre-line select-text">
-              {selectedSong.lyrics || selectedSong.teluguLyrics || "Lyrics for this praise song will be displayed here during live worship."}
-            </div>
-
-            {/* Modal Footer */}
-            <button
-              type="button"
-              onClick={() => setSelectedSong(null)}
-              className="w-full py-2.5 rounded-xl text-xs font-bold text-white cursor-pointer"
-              style={{ background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)' }}
-            >
-              Close Song
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

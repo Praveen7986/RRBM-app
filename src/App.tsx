@@ -10,14 +10,12 @@ import { HomeScreen } from './screens/HomeScreen';
 import { AlertScreen } from './screens/AlertScreen';
 import { SongsScreen } from './screens/SongsScreen';
 import { MoneyJarScreen } from './screens/MoneyJarScreen';
-import { LoadingScreen } from './components/LoadingScreen';
 import { UpdateModal } from './components/UpdateModal';
 import { ManagerModal } from './components/ManagerModal';
 import { realtimeStore } from './services/realtimeStore';
 import { setupNotificationTapListener } from './services/audioNotification';
 
 export const App: React.FC = () => {
-  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [currentTab, setCurrentTab] = useState<TabType>('home');
   const [isManagerOpen, setIsManagerOpen] = useState<boolean>(false);
 
@@ -81,11 +79,6 @@ export const App: React.FC = () => {
 
   return (
     <>
-      {/* Initial Loading Screen with RRBM Brand & Progress Bar */}
-      {isLoading && (
-        <LoadingScreen onComplete={() => setIsLoading(false)} />
-      )}
-
       {/* Android APK Update Dialog */}
       <UpdateModal />
 

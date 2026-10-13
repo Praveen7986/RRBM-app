@@ -49,4 +49,12 @@ export interface OfferingBalance {
   updatedAt: string;
 }
 
+export interface Expenditure {
+  id: string;
+  date: string;
+  purpose: string;
+  amount: number;
+  createdAt?: string;
+}
+
 export type ConnectionStatus = 'connected' | 'connecting' | 'offline';
