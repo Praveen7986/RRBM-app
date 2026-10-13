@@ -4,7 +4,7 @@
 import { Volunteer, AlertEvent, ChatMessage, OfferingBalance } from '../types/volunteer';
 
 const STORAGE_KEY_SERVER_URL = 'rrbm_custom_server_url';
-const DEFAULT_FALLBACK_SERVER = 'http://192.168.55.102:3000';
+const DEFAULT_FALLBACK_SERVER = 'https://rrbm-app-backend.onrender.com';
 
 export function getServerBaseUrl(): string {
   if (typeof window === 'undefined') return DEFAULT_FALLBACK_SERVER;
@@ -12,7 +12,13 @@ export function getServerBaseUrl(): string {
   // 1. User/Tester configured custom server URL in app settings
   const customUrl = localStorage.getItem(STORAGE_KEY_SERVER_URL);
   if (customUrl && customUrl.trim()) {
-    return customUrl.trim().replace(/\/+$/, '');
+    const cleanCustom = customUrl.trim().replace(/\/+$/, '');
+    // If phone has a stale local Wi-Fi IP (192.168.x.x), purge it so it connects over public internet
+    if (cleanCustom.includes('192.168.')) {
+      localStorage.removeItem(STORAGE_KEY_SERVER_URL);
+    } else {
+      return cleanCustom;
+    }
   }
 
   // 2. Check if running inside native Android / iOS WebView (Capacitor / Ionic)
@@ -22,7 +28,7 @@ export function getServerBaseUrl(): string {
 
   if (isCapacitor) {
     const envUrl = import.meta.env.VITE_API_URL;
-    if (envUrl && envUrl.trim()) {
+    if (envUrl && envUrl.trim() && !envUrl.includes('192.168.')) {
       return envUrl.trim().replace(/\/+$/, '');
     }
     return DEFAULT_FALLBACK_SERVER;
@@ -30,10 +36,10 @@ export function getServerBaseUrl(): string {
 
   // 3. Web browser environment (e.g., Render deployment, localhost, or LAN web)
   // When running in a standard web browser (http: or https:), use current origin.
-  // - On Render: origin is "https://rrbm-app.onrender.com" -> /api calls match origin
+  // - On Render: origin is "https://rrbm-app-backend.onrender.com" -> /api calls match origin
   // - On local Node server (port 3000): origin is "http://localhost:3000" or "http://127.0.0.1:3000"
   // - On Vite dev server (port 5173): origin is "http://localhost:5173", which Vite proxies to port 3000
-  if (window.location.origin && window.location.origin !== 'null') {
+  if (window.location.origin && window.location.origin !== 'null' && !window.location.origin.includes('localhost:5173')) {
     return window.location.origin;
   }
 

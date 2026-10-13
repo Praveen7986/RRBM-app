@@ -225,8 +225,8 @@ class RealtimeStoreService {
       return `${wsProtocol}//${parsed.host}/ws`;
     } catch {
       const envWs = import.meta.env.VITE_WS_URL;
-      if (envWs && envWs.trim()) return envWs.trim();
-      return 'ws://192.168.55.102:3000/ws';
+      if (envWs && envWs.trim() && !envWs.includes('192.168.')) return envWs.trim();
+      return 'wss://rrbm-app-backend.onrender.com/ws';
     }
   }
 
