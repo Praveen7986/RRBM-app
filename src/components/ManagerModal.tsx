@@ -210,7 +210,11 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
         setAuthError('Authentication failed.');
       }
     } catch (err: any) {
-      setAuthError(err.message || 'Invalid Secret Key. Please verify credentials.');
+      let msg = err.message || 'Invalid Secret Key. Please verify credentials.';
+      if (msg.includes('Unexpected token') || msg.includes('<!doctype') || msg.includes('JSON')) {
+        msg = 'Connection error: Unable to reach RRBM Cloud Backend. Please check your internet connection.';
+      }
+      setAuthError(msg);
     } finally {
       setIsLoading(false);
     }

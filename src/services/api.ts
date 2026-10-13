@@ -13,34 +13,51 @@ export function getServerBaseUrl(): string {
   const customUrl = localStorage.getItem(STORAGE_KEY_SERVER_URL);
   if (customUrl && customUrl.trim()) {
     const cleanCustom = customUrl.trim().replace(/\/+$/, '');
-    // If phone has a stale local Wi-Fi IP (192.168.x.x), purge it so it connects over public internet
-    if (cleanCustom.includes('192.168.')) {
+    // If phone has a stale local Wi-Fi IP (192.168.x.x) or localhost, purge it
+    if (
+      cleanCustom.includes('192.168.') || 
+      cleanCustom === 'http://localhost' || 
+      cleanCustom === 'https://localhost' ||
+      (cleanCustom.startsWith('http://localhost:') && !cleanCustom.includes(':3000'))
+    ) {
       localStorage.removeItem(STORAGE_KEY_SERVER_URL);
     } else {
       return cleanCustom;
     }
   }
 
-  // 2. Check if running inside native Android / iOS WebView (Capacitor / Ionic)
-  const isCapacitor = 
+  // 2. Comprehensive check for Native Android / iOS WebView (Capacitor / Cordova)
+  // In Capacitor with androidScheme: 'http', window.location.origin is 'http://localhost'
+  const isNativeApp = 
+    typeof (window as any).Capacitor !== 'undefined' ||
     window.location.protocol === 'capacitor:' || 
-    window.location.protocol === 'ionic:';
+    window.location.protocol === 'ionic:' ||
+    (window.location.hostname === 'localhost' && window.location.port !== '3000' && window.location.port !== '5173') ||
+    (window.location.hostname === '127.0.0.1' && window.location.port !== '3000' && window.location.port !== '5173');
 
-  if (isCapacitor) {
+  if (isNativeApp) {
     const envUrl = import.meta.env.VITE_API_URL;
-    if (envUrl && envUrl.trim() && !envUrl.includes('192.168.')) {
+    if (envUrl && envUrl.trim() && !envUrl.includes('192.168.') && !envUrl.includes('localhost')) {
       return envUrl.trim().replace(/\/+$/, '');
     }
     return DEFAULT_FALLBACK_SERVER;
   }
 
-  // 3. Web browser environment (e.g., Render deployment, localhost, or LAN web)
-  // When running in a standard web browser (http: or https:), use current origin.
-  // - On Render: origin is "https://rrbm-app-backend.onrender.com" -> /api calls match origin
-  // - On local Node server (port 3000): origin is "http://localhost:3000" or "http://127.0.0.1:3000"
-  // - On Vite dev server (port 5173): origin is "http://localhost:5173", which Vite proxies to port 3000
-  if (window.location.origin && window.location.origin !== 'null' && !window.location.origin.includes('localhost:5173')) {
+  // 3. Web browser environment: ONLY use window.location.origin if it is the backend server itself:
+  // - On Render: origin is "https://rrbm-app-backend.onrender.com"
+  // - On local Node dev server: origin is "http://localhost:3000" or "http://127.0.0.1:3000"
+  if (
+    window.location.origin && 
+    window.location.origin !== 'null' && 
+    (window.location.origin.includes('rrbm-app-backend.onrender.com') || window.location.origin.includes(':3000'))
+  ) {
     return window.location.origin;
+  }
+
+  // 4. Default: Render Cloud Backend
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && envUrl.trim() && !envUrl.includes('192.168.') && !envUrl.includes('localhost')) {
+    return envUrl.trim().replace(/\/+$/, '');
   }
 
   return DEFAULT_FALLBACK_SERVER;
@@ -78,13 +95,27 @@ async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T>
       }
     });
 
+    const contentType = res.headers.get('content-type') || '';
     if (!res.ok) {
       let errorMsg = `HTTP Error ${res.status}`;
       try {
-        const errJson = await res.json();
-        if (errJson.error) errorMsg = errJson.error;
+        if (contentType.includes('application/json')) {
+          const errJson = await res.json();
+          if (errJson.error) errorMsg = errJson.error;
+        } else {
+          const rawText = await res.text();
+          if (rawText && !rawText.includes('<!doctype') && !rawText.includes('<html')) {
+            errorMsg = rawText.substring(0, 100);
+          }
+        }
       } catch {}
       throw new Error(errorMsg);
+    }
+
+    if (!contentType.includes('application/json')) {
+      const text = await res.text();
+      console.warn(`[API] Server returned non-JSON response from ${url} (${contentType}):`, text.substring(0, 80));
+      throw new Error('Connection failed: Server returned an unexpected response. Please check your internet connection.');
     }
 
     return await res.json() as T;

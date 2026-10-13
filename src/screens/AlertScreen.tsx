@@ -107,7 +107,11 @@ export const AlertScreen: React.FC = () => {
         await requestNotificationPermission();
       }
     } catch (err: any) {
-      setLoginError(err.message || 'Authentication error.');
+      let msg = err.message || 'Authentication error.';
+      if (msg.includes('Unexpected token') || msg.includes('<!doctype') || msg.includes('JSON')) {
+        msg = 'Connection error: Unable to reach RRBM Cloud Backend. Please check your internet connection.';
+      }
+      setLoginError(msg);
     } finally {
       setIsSigningIn(false);
     }
