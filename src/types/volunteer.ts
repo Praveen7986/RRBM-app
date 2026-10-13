@@ -1,6 +1,6 @@
 // src/types/volunteer.ts
 
-export type TabType = 'home' | 'alert' | 'songs' | 'blessings';
+export type TabType = 'home' | 'alert' | 'songs' | 'money';
 
 export interface Volunteer {
   id: string; // e.g. "001", "002", "261" (Assigned by admin)

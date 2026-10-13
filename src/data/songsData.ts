@@ -256,199 +256,185 @@ You're never gonna let, never gonna let me down`,
     {
       id: 's7',
       day: 'day2',
-      title: 'As the Deer Pants for Water',
-      sub: 'Thirst for God & Fasting Altar',
-      category: 'Morning Fasting',
-      time: '09:30 AM',
-      key: 'D Major',
+      title: 'Nee Mahima',
+      sub: 'RRBM Worship Team',
+      category: 'Opening',
+      time: '5:12',
+      key: 'Key of D',
       tempo: '72 BPM',
-      lyricsPreview: 'As the deer panteth for the water, so my soul longeth after Thee...',
-      themeVerse: 'Psalm 42:1 — "As the deer pants for streams of water, so my soul pants for you, my God."',
-      lyrics: `[Verse 1]
-As the deer panteth for the water
-So my soul longeth after Thee
-You alone are my heart's desire
-And I long to worship Thee
+      lyricsPreview: 'Nee mahima choodalani naa aasa Yesayya...',
+      themeVerse: 'Psalm 63:2 — "I have seen you in the sanctuary and beheld your power and your glory."',
+      lyrics: `[పల్లవి]
+నీ మహిమ చూడాలని నా ఆశ యేసయ్యా
+నీ సన్నిధిలో గడపాలని నా తపన దేవా
+మహిమ ఘనత నీకే ప్రభావము నీకే
+యుగయుగములు నీకే చెల్లును గాక!
 
-[Chorus]
-You alone are my strength, my shield
-To You alone may my spirit yield
-You alone are my heart's desire
-And I long to worship Thee
+[చరణం 1]
+పరిశుద్ధ స్థలములో నిన్ను చూచితిని
+నీ బలమును నీ ప్రభావమును కనుగొంటిని
+జీవముకంటె నీ కృప ఉత్తమమైనది
+నా పెదవులు నిన్ను స్తుతించుచున్నవి!
 
-[Verse 2]
-You're my friend and You are my brother
-Even though You are a King
-I love You more than any other
-So much more than anything`,
-      teluguLyrics: `[పల్లవి]
-దుప్పి నీటివాగుల కొరకు ఆశించునట్లు
-దేవా నా ప్రాణము నీ కొరకు ఆశించుచున్నది
-నీవే నా బలము, నా కేడెము
-నిన్నే ఆరాధింతును నా యేసయ్యా!`
+[చరణం 2]
+నా ప్రాణము నీ కొరకు తృప్తి నొందుచున్నది
+ఉల్లాసముగల పెదవులతో నిన్ను కీర్తింతును
+రాత్రిజాములయందు నిన్ను ధ్యానింతును
+నీ రెక్కల నీడలో హర్షించుచుందును!`,
+      teluguLyrics: `నీ మహిమ చూడాలని నా ఆశ యేసయ్యా...`
     },
     {
       id: 's8',
       day: 'day2',
-      title: 'Jesus at the Center of It All',
-      sub: 'Youth Devotion & Surrender',
-      category: 'Devotion',
-      time: '10:45 AM',
-      key: 'A Major',
-      tempo: '66 BPM',
-      lyricsPreview: 'Jesus at the center of it all, from beginning to the end...',
-      themeVerse: 'Colossians 1:18 — "So that in everything He might have the supremacy."',
-      lyrics: `[Verse 1]
-Jesus at the center of it all
-Jesus at the center of it all
-From beginning to the end
-It will always be, it's always been You Jesus, Jesus
+      title: 'Yesu Nee Naamam',
+      sub: 'RRBM Worship Team',
+      category: 'Worship',
+      time: '4:28',
+      key: 'Key of G',
+      tempo: '68 BPM',
+      lyricsPreview: 'Yesu nee naamam entho madhuram, sarva srushtiki aadharam...',
+      themeVerse: 'Philippians 2:9 — "Therefore God exalted him to the highest place and gave him the name that is above every name."',
+      lyrics: `[పల్లవి]
+యేసు నీ నామము ఎంతో మధురము
+సర్వ సృష్టికి నీవే ఆధారము
+యేసు రాజా నీకే స్తోత్రము
+మా రక్షకా నీకే ఆరాధన!
 
-[Chorus]
-Nothing else matters, nothing in this world will do
-Jesus You're the center, everything revolves around You
-Jesus You, at the center of it all
+[చరణం 1]
+రోగములను బాగుచేయు నామము
+బంధకములను తెంచు నామము
+సమాధానమును ఇచ్చు నామము
+రక్షణను అనుగ్రహించు నామము!
 
-[Bridge]
-From my heart to the heavens, Jesus be the center
-It's all about You, yes it's all about You`,
-      teluguLyrics: `[పల్లవి]
-నా జీవిత కేంద్రము యేసయ్యవే
-ఆదియు అంతము నీవే కదా
-నా హృదయములో నీవే రారాజుగా
-ఎల్లప్పుడు నిలువుము యేసయ్యా!`
+[చరణం 2]
+ఏ నామమున రక్షణ లేదు
+ఆకాశము క్రింద భూమిపై
+యేసుక్రీస్తు నామమునందే
+పాప క్షమాపణ దొరకును!`,
+      teluguLyrics: `యేసు నీ నామము ఎంతో మధురము...`
     },
     {
       id: 's9',
       day: 'day2',
-      title: 'Breathe on Me, Breath of God',
-      sub: 'Holy Spirit Renewal Prayer',
-      category: 'Spiritual Renewal',
-      time: '03:00 PM',
-      key: 'F Major',
+      title: 'Holy Spirit, Breathe On Us',
+      sub: 'Bethel Translation Team',
+      category: 'Intercession',
+      time: '6:04',
+      key: 'Key of A',
       tempo: '64 BPM',
-      lyricsPreview: 'Breathe on me, Breath of God, fill me with life anew...',
+      lyricsPreview: 'Holy Spirit breathe on us, fill this sanctuary with Your presence...',
       themeVerse: 'Ezekiel 37:9 — "Breathe into these slain, that they may live."',
       lyrics: `[Verse 1]
-Breathe on me, Breath of God
-Fill me with life anew
-That I may love what Thou dost love
-And do what Thou wouldst do
-
-[Verse 2]
-Breathe on me, Breath of God
-Until my heart is pure
-Until with Thee I will one will
-To do and to endure
+Holy Spirit breathe on us
+Fill this room with heavenly wind
+Revive the dry bones in our midst
+Let revival fire fall again
 
 [Chorus]
-Come living Breath of God
-Revive this dry and thirsty soul
-Make us whole, make us whole`,
-      teluguLyrics: `[పల్లవి]
-జీవవాయువా మాపై ఊదుము
-నూతన జీవముతో నింపుము
-ఎండిన ఎముకలు జీవించునట్లు
-నీ ఆత్మను మాపై కుమ్మరించుము!`
+Holy Spirit, You are welcome here
+Come flood this place and fill the atmosphere
+Your glory, God, is what our hearts long for
+To be overcome by Your presence, Lord
+
+[Verse 2]
+There's nothing worth more that will ever come close
+No thing can compare, You're our living hope
+Your presence, Lord
+
+[Bridge]
+Let us become more aware of Your presence
+Let us experience the glory of Your goodness!`,
+      teluguLyrics: `పరిశుద్ధాత్ముడా మాపై ఊదుము, ఈ స్థలమును నీ సన్నిధితో నింపుము!`
     },
     {
       id: 's10',
       day: 'day2',
-      title: 'Hosanna in the Highest',
-      sub: 'Exaltation & Joyful Worship',
-      category: 'High Praise',
-      time: '06:30 PM',
-      key: 'G Major',
-      tempo: '124 BPM',
-      lyricsPreview: 'Hosanna, Hosanna, Hosanna in the highest...',
-      themeVerse: 'Matthew 21:9 — "Hosanna in the highest heaven!"',
-      lyrics: `[Verse 1]
-Praise is rising, eyes are turning to You
-We turn to You
-Hope is stirring, hearts are yearning for You
-We long for You
+      title: 'Naa Hrudayamlo',
+      sub: 'RRBM Youth Choir',
+      category: 'Worship',
+      time: '4:21',
+      key: 'Key of C',
+      tempo: '70 BPM',
+      lyricsPreview: 'Naa hrudayamlo neevundaga, naaku bhayamemi ledhayya...',
+      themeVerse: 'Psalm 73:26 — "My flesh and my heart may fail, but God is the strength of my heart and my portion forever."',
+      lyrics: `[పల్లవి]
+నా హృదయములో నీవుండగా
+నాకు భయమేమి లేదయ్యా
+నా జీవితములో నీవుండగా
+నాకు కొరత ఏది లేదయ్యా!
 
-[Chorus]
-Hosanna, Hosanna!
-You are the God who saves us
-Worthy of all our praises
-Hosanna, Hosanna!
-Come have Your way among us
-We welcome You here, Lord Jesus`,
-      teluguLyrics: `[పల్లవి]
-హోసన్నా సర్వోన్నతమైన స్థలములలో
-రక్షణ కర్తవైన దేవునికి హోసన్నా!
-స్తుతులకు పాత్రుడవు నీవే యేసయ్యా!`
+[చరణం 1]
+కన్నీటి లోయలలో నడిచినను
+నీ కృప నన్ను ఆదరించెను
+శ్రమల కొలిమిలో వేగినను
+నీ హస్తము నన్ను కాపాడెను!
+
+[చరణం 2]
+నీవే నా బలము నా రక్షణ
+నీవే నా దుర్గము నా శరణు
+ఎల్లప్పుడూ నిన్నే స్తుతింతును
+నా ప్రాణమున్నంత వరకునూ!`,
+      teluguLyrics: `నా హృదయములో నీవుండగా, నాకు భయమేమి లేదయ్యా...`
     },
     {
       id: 's11',
       day: 'day2',
-      title: '10,000 Reasons (Bless the Lord)',
-      sub: 'Evening Praise & Testimony',
-      category: 'Praise',
-      time: '08:00 PM',
-      key: 'G Major',
-      tempo: '73 BPM',
-      lyricsPreview: 'Bless the Lord O my soul, O my soul, worship His holy name...',
-      themeVerse: 'Psalm 103:1 — "Praise the Lord, my soul; all my inmost being, praise His holy name."',
-      lyrics: `[Chorus]
-Bless the Lord O my soul, O my soul
-Worship His holy name
-Sing like never before, O my soul
-I'll worship Your holy name
+      title: 'Krupalone Chalu',
+      sub: 'RRBM Worship Team',
+      category: 'Offering',
+      time: '5:47',
+      key: 'Key of E',
+      tempo: '66 BPM',
+      lyricsPreview: 'Nee krupa naaku chaalunu Yesayya, jeevithaanthamu varaku...',
+      themeVerse: '2 Corinthians 12:9 — "My grace is sufficient for you, for my power is made perfect in weakness."',
+      lyrics: `[పల్లవి]
+కృపలోనే చాలు నీ కృపలోనే చాలు
+జీవితాంతము వరకు నీ కృపయే చాలు
+శ్రమలైన ఇరుకులైన నీ కృపయే చాలు
+నా ప్రాణ ప్రియుడా నీ కృపయే చాలు!
 
-[Verse 1]
-The sun comes up, it's a new day dawning
-It's time to sing Your song again
-Whatever may pass, and whatever lies before me
-Let me be singing when the evening comes
+[చరణం 1]
+బలహీన సమయమున బలపరచు కృప
+రోగ శోధనలలో స్వస్థపరచు కృప
+నశించు ఆత్మలను రక్షించు కృప
+నిత్య రాజ్యములో చేర్చు కృప!
 
-[Verse 2]
-You're rich in love, and You're slow to anger
-Your name is great, and Your heart is kind
-For all Your goodness I will keep on singing
-Ten thousand reasons for my heart to find`,
-      teluguLyrics: `[పల్లవి]
-నా ప్రాణమా యెహోవాను స్తుతించుము
-ఆయన పరిశుద్ధ నామమును కీర్తించుము
-ఎన్నడూ లేని రీతిగా గానము చేయుము
-పదివేల కారణములు నా హృదయమునకు కలవు!`
+[చరణం 2]
+అర్హత లేని నాపై కుమ్మరించిన కృప
+ప్రేమతో నన్ను హత్తుకున్న కృప
+నీ సిలువ రక్తముతో కడిగిన కృప
+సదాకాలము నాతో ఉండు కృప!`,
+      teluguLyrics: `కృపలోనే చాలు నీ కృపలోనే చాలు...`
     },
     {
       id: 's12',
       day: 'day2',
-      title: 'Reckless Love',
-      sub: 'Father’s Heart & Midnight Vigils',
-      category: 'Worship',
-      time: '09:30 PM',
-      key: 'F# Minor',
-      tempo: '68 BPM',
-      lyricsPreview: 'Before I spoke a word, You were singing over me...',
-      themeVerse: 'Luke 15:4 — "Leaves the ninety-nine in the open country and goes after the lost sheep."',
-      lyrics: `[Verse 1]
-Before I spoke a word, You were singing over me
-You have been so, so good to me
-Before I took a breath, You breathed Your life in me
-You have been so, so kind to me
+      title: 'Aradhana Yesunaku',
+      sub: 'RRBM Youth Choir',
+      category: 'Closing',
+      time: '3:56',
+      key: 'Key of F',
+      tempo: '110 BPM',
+      lyricsPreview: 'Aradhana Yesunaku, hallelujah sthothramulatho...',
+      themeVerse: 'Revelation 5:12 — "Worthy is the Lamb, who was slain, to receive power and wealth and wisdom and strength and honor and glory and praise!"',
+      lyrics: `[పల్లవి]
+ఆరాధన యేసునకే - హల్లెలూయా స్తుతులతో
+ఆరాధన రక్షకునకే - నిత్య సంతోషముతో
+జయము జయము యేసునకే
+మహిమ ఘనత దేవునకే!
 
-[Chorus]
-Oh, the overwhelming, never-ending, reckless love of God
-Oh, it chases me down, fights 'til I'm found, leaves the ninety-nine
-I couldn't earn it, and I don't deserve it, still You give Yourself away
-Oh, the overwhelming, never-ending, reckless love of God
+[చరణం 1]
+మరణమును గెలిచి లేచిన రారాజు
+సాతాను శక్తులను ఓడించిన దేవుడు
+ఆకాశ మహాకాశములకు పైగా
+హెచ్చింపబడిన నా యేసయ్య!
 
-[Bridge]
-There's no shadow You won't light up
-Mountain You won't climb up
-Coming after me
-There's no wall You won't kick down
-Lie You won't tear down
-Coming after me`,
-      teluguLyrics: `[పల్లవి]
-అంతులేని అనంతమైన దేవుని ప్రేమ
-తొంభై తొమ్మిదిని విడిచి నన్ను వెదకివచ్చెను
-నేను అర్హుడను కాను, సంపాదించలేను
-అయిననూ నీ ప్రాణమును నాకై అర్పించితివి!`
+[చరణం 2]
+రండి ఉత్సాహముగా పాడుదము
+మన రక్షణ దుర్గమును కీర్తింతుము
+కృతజ్ఞతా స్తుతులతో సన్నిధికి రండి
+హల్లెలూయా గీతములను ఆలపింపుడి!`,
+      teluguLyrics: `ఆరాధన యేసునకే - హల్లెలూయా స్తుతులతో...`
     }
   ],
   day3: [

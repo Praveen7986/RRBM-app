@@ -1,51 +1,50 @@
 /* ==========================================================================
-   RRBM — Production Mobile Design System (Clean Native Android Architecture)
+   RRBM App — Production Design System & Responsive Architecture
+   Inspired by Reference Mobile Design: Dark Minimalist Charcoal & Electric Blue
    ========================================================================== */
 
 :root {
-  /* Color Palette - Deep Midnight Navy Canvas + Sky Blue & Warm Gold Accents */
-  --bg-app: #060B19;
-  --bg-surface: #0E172C;
-  --bg-surface-elevated: #14203D;
-  --bg-surface-secondary: #19284C;
-  --bg-surface-dark: #040710;
+  /* Color Palette - Ultra-Dark Midnight Charcoal + Bright Sky Blue Accents */
+  --bg-app: #080C16;
+  --bg-surface: #101726;
+  --bg-surface-elevated: #151F33;
+  --bg-surface-card: #0F172A;
+  --bg-surface-subtle: rgba(16, 23, 38, 0.7);
+  --bg-input: rgba(7, 12, 23, 0.8);
 
   /* Typography Colors */
   --text-primary: #FFFFFF;
   --text-secondary: #94A3B8;
   --text-muted: #64748B;
   --text-sky: #38BDF8;
-  --text-sky-light: #7DD3FC;
-  --text-gold: #F59E0B;
-  --text-gold-light: #FBBF24;
+  --text-amber: #FBBF24;
+  --text-rose: #F43F5E;
+  --text-emerald: #34D399;
 
-  /* Accent Colors */
+  /* Accent Tokens */
   --accent-sky: #38BDF8;
   --accent-sky-dark: #0284C7;
   --accent-sky-glow: rgba(56, 189, 248, 0.25);
   --accent-sky-subtle: rgba(56, 189, 248, 0.12);
-  --accent-royal: #2563EB;
-  --accent-gold: #F59E0B;
-  --accent-gold-light: #FBBF24;
-  --accent-gold-glow: rgba(245, 158, 11, 0.3);
-  --accent-emerald: #10B981;
-  --accent-rose: #F43F5E;
+  --accent-amber: #F59E0B;
+  --accent-amber-subtle: rgba(245, 158, 11, 0.15);
+  --accent-rose: #EF4444;
 
   /* Borders & Shadows */
-  --border-light: rgba(56, 189, 248, 0.12);
-  --border-card: rgba(56, 189, 248, 0.18);
-  --border-gold: rgba(245, 158, 11, 0.25);
-  --shadow-card: 0 8px 24px -4px rgba(0, 0, 0, 0.5), 0 0 1px rgba(56, 189, 248, 0.15);
-  --shadow-float: 0 14px 30px -4px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.2);
-  --shadow-nav: 0 -4px 20px rgba(0, 0, 0, 0.6), 0 -1px 0 rgba(56, 189, 248, 0.12);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-card: rgba(56, 189, 248, 0.12);
+  --border-card-hover: rgba(56, 189, 248, 0.28);
+  --border-active: rgba(56, 189, 248, 0.5);
+  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 24px -4px rgba(56, 189, 248, 0.35);
 
   /* Typography */
-  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, Roboto, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 
-  /* Mobile Safe Areas & Sizing */
+  /* Sizing & Mobile Safe Areas */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 12px);
-  --nav-height: 56px;
+  --nav-height: 60px;
 }
 
 *, *::before, *::after {
@@ -53,13 +52,12 @@
   margin: 0;
   padding: 0;
   -webkit-tap-highlight-color: transparent;
-  user-select: none;
 }
 
 html, body {
   width: 100%;
-  min-height: 100%;
   height: 100%;
+  min-height: 100%;
   background-color: var(--bg-app);
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -74,40 +72,59 @@ html, body {
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  position: relative;
-  background-color: var(--bg-app);
+  background-color: #03060C;
 }
 
-/* Native Android Full Mobile Container */
+/* ==========================================================================
+   Responsive Mobile Container (Desktop Centered, Mobile Full Width)
+   ========================================================================== */
+
 .app-container {
   width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
   height: 100%;
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background-color: var(--bg-app);
   position: relative;
   overflow: hidden;
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.8);
 }
 
-/* Scrollable Screen Content Area with System Safe Insets */
+@media (min-width: 768px) {
+  .app-container {
+    max-width: 100%;
+    flex-direction: row;
+    box-shadow: none;
+    border-left: none;
+    border-right: none;
+  }
+}
+
+/* Scrollable Screen Content Area */
 .screen-content {
   flex: 1 1 auto;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 10px 14px calc(var(--nav-height) + var(--safe-bottom) + 16px) 14px;
+  padding: calc(var(--safe-top) + 12px) 16px calc(var(--nav-height) + var(--safe-bottom) + 20px) 16px;
   -webkit-overflow-scrolling: touch;
   position: relative;
-  z-index: 2;
   display: flex;
   flex-direction: column;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .screen-content {
+    padding: 28px 36px 48px 36px;
+    max-height: 100dvh;
+  }
 }
 
 .screen-content::-webkit-scrollbar {
   width: 3px;
-}
-.screen-content::-webkit-scrollbar-track {
-  background: transparent;
 }
 .screen-content::-webkit-scrollbar-thumb {
   background: rgba(56, 189, 248, 0.2);
@@ -115,42 +132,50 @@ html, body {
 }
 
 /* ==========================================================================
-   Card System
+   Card System (Charcoal Surface with Subtle Electric Blue Borders)
    ========================================================================== */
 
 .clean-card {
   background-color: var(--bg-surface);
-  border-radius: 20px;
+  border-radius: 18px;
   border: 1px solid var(--border-card);
   box-shadow: var(--shadow-card);
   position: relative;
   overflow: hidden;
+  transition: border-color 0.2s ease, transform 0.15s ease;
 }
 
 .clean-card-elevated {
   background-color: var(--bg-surface-elevated);
-  border-radius: 20px;
+  border-radius: 18px;
   border: 1px solid var(--border-card);
   box-shadow: var(--shadow-card);
 }
 
+.clean-card-interactive {
+  cursor: pointer;
+}
+.clean-card-interactive:active {
+  transform: scale(0.985);
+}
+
 /* ==========================================================================
-   Compact 4-Item Android Bottom Navigation Bar
+   Bottom Navigation Bar (4 Items, Docked, Blur, Active Top Glow)
    ========================================================================== */
 
 .bottom-nav-bar {
   position: fixed;
   bottom: 0;
-  left: 0;
-  right: 0;
+  left: 50%;
+  transform: translateX(-50%);
   width: 100%;
+  max-width: 460px;
   height: calc(var(--nav-height) + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
-  background: rgba(6, 11, 25, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-top: 1px solid var(--border-light);
-  box-shadow: var(--shadow-nav);
+  background: rgba(8, 12, 22, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-around;
@@ -167,70 +192,107 @@ html, body {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 2px 0;
+  padding: 4px 0;
   position: relative;
   transition: all 0.2s ease;
   outline: none;
+  color: var(--text-muted);
 }
 
 .bottom-nav-item:active {
-  transform: scale(0.94);
+  transform: scale(0.92);
 }
 
-.nav-icon-wrapper {
-  width: 32px;
-  height: 32px;
+.bottom-nav-item.is-active {
+  color: var(--accent-sky);
+}
+
+.nav-icon-container {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.nav-icon-wrapper img {
+  position: relative;
   width: 24px;
   height: 24px;
-  max-width: 24px;
-  max-height: 24px;
-  object-fit: contain;
-  transition: transform 0.2s ease, filter 0.2s ease;
-}
-
-.bottom-nav-item.is-active .nav-icon-wrapper {
-  background-color: var(--accent-sky-subtle);
-  transform: translateY(-2px);
-}
-
-.bottom-nav-item.is-active .nav-icon-wrapper img {
-  filter: drop-shadow(0 2px 6px rgba(56, 189, 248, 0.6));
-  transform: scale(1.1);
 }
 
 .bottom-nav-label {
   font-size: 0.68rem;
   font-weight: 600;
-  color: var(--text-muted);
-  margin-top: 1px;
+  margin-top: 3px;
   letter-spacing: 0.01em;
   transition: color 0.2s ease;
 }
 
 .bottom-nav-item.is-active .bottom-nav-label {
+  font-weight: 700;
   color: var(--accent-sky);
-  font-weight: 800;
 }
 
-.nav-active-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background-color: var(--accent-sky);
-  box-shadow: 0 0 6px #38bdf8;
-  margin-top: 1px;
+/* Active Top Indicator Bar */
+.bottom-nav-item.is-active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 28px;
+  height: 2.5px;
+  background: var(--accent-sky);
+  border-radius: 0 0 3px 3px;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
 }
 
 /* ==========================================================================
-   Utility Classes & Layout
+   Concentric Glowing Alert Circle
+   ========================================================================== */
+
+.alert-ring-outer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.08) 0%, rgba(8, 12, 22, 0) 70%);
+  border: 1px dashed rgba(56, 189, 248, 0.18);
+}
+
+.alert-ring-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #0F1D38 0%, #091326 100%);
+  border: 2px solid var(--accent-sky);
+  box-shadow: 0 0 25px rgba(56, 189, 248, 0.35), inset 0 0 15px rgba(56, 189, 248, 0.2);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.alert-ring-inner:active {
+  transform: scale(0.92);
+  box-shadow: 0 0 35px rgba(56, 189, 248, 0.6), inset 0 0 25px rgba(56, 189, 248, 0.3);
+}
+
+/* Active Alert State (Crimson Pulse) */
+.alert-ring-inner.is-active-broadcast {
+  border-color: #EF4444;
+  background: radial-gradient(circle, #381216 0%, #1A090B 100%);
+  box-shadow: 0 0 35px rgba(239, 68, 68, 0.6), inset 0 0 20px rgba(239, 68, 68, 0.3);
+  animation: alertPulse 1.8s infinite ease-in-out;
+}
+
+@keyframes alertPulse {
+  0% { transform: scale(1); box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }
+  50% { transform: scale(1.05); box-shadow: 0 0 40px rgba(239, 68, 68, 0.8); }
+  100% { transform: scale(1); box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }
+}
+
+/* ==========================================================================
+   Utility Layout Classes
    ========================================================================== */
 
 .flex { display: flex; }
@@ -254,7 +316,6 @@ html, body {
 .inset-0 { inset: 0px; }
 .overflow-hidden { overflow: hidden; }
 .overflow-y-auto { overflow-y: auto; }
-.select-none { user-select: none; }
 
 .grid { display: grid; }
 .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -285,14 +346,6 @@ html, body {
 .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
 .py-2\.5 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
 .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
-.py-3\.5 { padding-top: 0.875rem; padding-bottom: 0.875rem; }
-.pt-1 { padding-top: 0.25rem; }
-.pt-2 { padding-top: 0.5rem; }
-.pt-3 { padding-top: 0.75rem; }
-.pb-1 { padding-bottom: 0.25rem; }
-.pb-2 { padding-bottom: 0.5rem; }
-.pb-3 { padding-bottom: 0.75rem; }
-.pb-4 { padding-bottom: 1rem; }
 
 .mt-0\.5 { margin-top: 0.125rem; }
 .mt-1 { margin-top: 0.25rem; }
@@ -301,13 +354,9 @@ html, body {
 .mt-2\.5 { margin-top: 0.625rem; }
 .mt-3 { margin-top: 0.75rem; }
 .mt-4 { margin-top: 1rem; }
-.mt-auto { margin-top: auto; }
 .mb-1 { margin-bottom: 0.25rem; }
-.mb-1\.5 { margin-bottom: 0.375rem; }
 .mb-2 { margin-bottom: 0.5rem; }
-.mb-2\.5 { margin-bottom: 0.625rem; }
 .mb-3 { margin-bottom: 0.75rem; }
-.mb-4 { margin-bottom: 1rem; }
 
 .space-y-1 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.25rem; }
 .space-y-1\.5 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.375rem; }
@@ -316,21 +365,17 @@ html, body {
 .space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.75rem; }
 .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 1rem; }
 
-.space-x-1\.5 > :not([hidden]) ~ :not([hidden]) { margin-left: 0.375rem; }
-.space-x-2 > :not([hidden]) ~ :not([hidden]) { margin-left: 0.5rem; }
-.space-x-3 > :not([hidden]) ~ :not([hidden]) { margin-left: 0.75rem; }
-
+.text-\[9px\] { font-size: 9px; line-height: 12px; }
 .text-\[10px\] { font-size: 10px; line-height: 14px; }
 .text-\[11px\] { font-size: 11px; line-height: 15px; }
-.text-\[11\.5px\] { font-size: 11.5px; line-height: 16px; }
 .text-\[12px\] { font-size: 12px; line-height: 16px; }
 .text-xs { font-size: 0.75rem; line-height: 1rem; }
 .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
 .text-base { font-size: 1rem; line-height: 1.5rem; }
 .text-lg { font-size: 1.125rem; line-height: 1.6rem; }
 .text-xl { font-size: 1.25rem; line-height: 1.75rem; }
-.text-2xl { font-size: 1.45rem; line-height: 1.9rem; }
-.text-3xl { font-size: 1.75rem; line-height: 2.1rem; }
+.text-2xl { font-size: 1.5rem; line-height: 2rem; }
+.text-3xl { font-size: 1.875rem; line-height: 2.25rem; }
 
 .font-normal { font-weight: 400; }
 .font-medium { font-weight: 500; }
@@ -351,17 +396,14 @@ html, body {
 .text-slate-400 { color: #94A3B8; }
 .text-slate-500 { color: #64748B; }
 
-.text-sky-200 { color: #BAE6FD; }
 .text-sky-300 { color: #7DD3FC; }
 .text-sky-400 { color: #38BDF8; }
 .text-sky-500 { color: #0EA5E9; }
 
 .text-amber-300 { color: #FDE047; }
 .text-amber-400 { color: #FBBF24; }
-.text-amber-500 { color: #F59E0B; }
-
-.text-emerald-400 { color: #34D399; }
 .text-rose-400 { color: #FB7185; }
+.text-emerald-400 { color: #34D399; }
 
 .rounded-lg { border-radius: 0.5rem; }
 .rounded-xl { border-radius: 0.75rem; }
@@ -373,12 +415,3 @@ html, body {
 .border-2 { border-width: 2px; }
 .border-b { border-bottom-width: 1px; }
 .border-t { border-top-width: 1px; }
-
-/* Custom Scrollbar for Chat */
-.chat-scroll-area::-webkit-scrollbar {
-  width: 3px;
-}
-.chat-scroll-area::-webkit-scrollbar-thumb {
-  background: rgba(56, 189, 248, 0.2);
-  border-radius: 4px;
-}

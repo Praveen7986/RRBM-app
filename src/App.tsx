@@ -1,21 +1,25 @@
 // src/App.tsx
-// Root RRBM Mobile Application Container with Integrated APK Update System & Notification Router
+// Root RRBM Application Container with Responsive Sidebar Navigation (Desktop/Tablet) and Bottom Navigation (Mobile)
+// Preserves real-time Firebase syncing, APK updates, background audio notification tap handling, and Management Desk
 
 import React, { useState, useEffect } from 'react';
 import { TabType } from './types/navigation';
 import { BottomNavigation } from './components/BottomNavigation';
+import { SidebarNavigation } from './components/SidebarNavigation';
 import { HomeScreen } from './screens/HomeScreen';
 import { AlertScreen } from './screens/AlertScreen';
 import { SongsScreen } from './screens/SongsScreen';
-import { BlessingsScreen } from './screens/BlessingsScreen';
+import { MoneyJarScreen } from './screens/MoneyJarScreen';
 import { LoadingScreen } from './components/LoadingScreen';
 import { UpdateModal } from './components/UpdateModal';
+import { ManagerModal } from './components/ManagerModal';
 import { realtimeStore } from './services/realtimeStore';
 import { setupNotificationTapListener } from './services/audioNotification';
 
 export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [currentTab, setCurrentTab] = useState<TabType>('home');
+  const [isManagerOpen, setIsManagerOpen] = useState<boolean>(false);
 
   useEffect(() => {
     // 1. Listen for Android native notification tap routing (Leader Alert or Live Chat)
@@ -26,7 +30,6 @@ export const App: React.FC = () => {
 
       const type = detail.type || '';
       if (type === 'ALERT' || type === 'CHAT') {
-        // Immediately navigate to Active Alert + Live Chat Screen
         setCurrentTab('alert');
       }
     };
@@ -69,8 +72,8 @@ export const App: React.FC = () => {
         return <AlertScreen />;
       case 'songs':
         return <SongsScreen />;
-      case 'blessings':
-        return <BlessingsScreen />;
+      case 'money':
+        return <MoneyJarScreen />;
       default:
         return <HomeScreen onNavigate={(tab) => setCurrentTab(tab)} />;
     }
@@ -83,17 +86,29 @@ export const App: React.FC = () => {
         <LoadingScreen onComplete={() => setIsLoading(false)} />
       )}
 
-      {/* Private Android APK Update Dialog */}
+      {/* Android APK Update Dialog */}
       <UpdateModal />
 
-      {/* Main Mobile App Container */}
+      {/* Global Management Desk Modal (Accessible from Sidebar & Screen Buttons) */}
+      {isManagerOpen && (
+        <ManagerModal isOpen={isManagerOpen} onClose={() => setIsManagerOpen(false)} />
+      )}
+
+      {/* Main Responsive App Container */}
       <div className="app-container" id="rrbm-app-root">
+        {/* Left Sidebar Navigation for Desktop & Tablets (Figma Layout) */}
+        <SidebarNavigation
+          currentTab={currentTab}
+          onTabChange={(tab) => setCurrentTab(tab)}
+          onOpenManager={() => setIsManagerOpen(true)}
+        />
+
         {/* Scrollable Main Screen Content Area */}
         <main className="screen-content" id="app-main-content">
           {renderActiveScreen()}
         </main>
 
-        {/* Fixed 4-Item 3D Bottom Navigation Bar */}
+        {/* Fixed 4-Item Bottom Navigation Bar for Mobile Phones */}
         <BottomNavigation
           currentTab={currentTab}
           onTabChange={(tab) => setCurrentTab(tab)}
@@ -104,4 +119,3 @@ export const App: React.FC = () => {
 };
 
 export default App;
-

@@ -1,9 +1,8 @@
-export type TabType = 'home' | 'alert' | 'songs' | 'blessings';
+export type TabType = 'home' | 'alert' | 'songs' | 'money';
 
 export interface NavItemConfig {
   id: TabType;
   label: string;
-  iconSrc: string;
-  fallbackIconSrc: string;
-  description: string;
+  iconSrc?: string;
+  description?: string;
 }
