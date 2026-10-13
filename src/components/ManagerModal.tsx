@@ -185,7 +185,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const secret = pinInput.trim();
+    const secret = pinInput.trim().replace(/^['"](.*)['"]$/, '$1').trim();
     if (!secret) return;
 
     setIsLoading(true);

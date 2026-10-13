@@ -31,11 +31,12 @@ if (fs.existsSync(envFilePath)) {
 }
 
 // Fail-secure validation: ADMIN_SECRET is mandatory and must be >= 8 characters
-const ADMIN_SECRET = process.env.ADMIN_SECRET;
-if (!ADMIN_SECRET || ADMIN_SECRET.trim().length < 8) {
+const RAW_ADMIN_SECRET = String(process.env.ADMIN_SECRET || '').trim().replace(/^['"](.*)['"]$/, '$1').trim();
+if (!RAW_ADMIN_SECRET || RAW_ADMIN_SECRET.length < 8) {
   console.error('[SECURITY FATAL] ADMIN_SECRET environment variable is missing or shorter than 8 characters. Server will not boot with unconfigured or weak secrets.');
   process.exit(1);
 }
+const ADMIN_SECRET = RAW_ADMIN_SECRET;
 
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
@@ -152,7 +153,8 @@ async function verifyAdminToken(req) {
   const pinHeader = req.headers['x-admin-pin'];
 
   // 1. Direct header verification with ADMIN_SECRET using constant-time comparison
-  if (pinHeader && pinHeader.length === ADMIN_SECRET.length && crypto.timingSafeEqual(Buffer.from(pinHeader), Buffer.from(ADMIN_SECRET))) {
+  const rawPin = String(pinHeader || '').trim().replace(/^['"](.*)['"]$/, '$1').trim();
+  if (rawPin && rawPin.length === ADMIN_SECRET.length && crypto.timingSafeEqual(Buffer.from(rawPin), Buffer.from(ADMIN_SECRET))) {
     return { uid: 'local_admin', admin: true };
   }
 
@@ -813,7 +815,8 @@ const server = http.createServer((req, res) => {
           }
 
           const body = await parseJsonBody();
-          const userSecret = String(body.secret || body.pin || '');
+          const rawInput = String(body.secret || body.pin || '');
+          const userSecret = rawInput.trim().replace(/^['"](.*)['"]$/, '$1').trim();
           const isMatch = (userSecret.length === ADMIN_SECRET.length) && crypto.timingSafeEqual(Buffer.from(userSecret), Buffer.from(ADMIN_SECRET));
 
           if (!isMatch) {
