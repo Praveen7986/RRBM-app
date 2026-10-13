@@ -1,10 +1,10 @@
 // src/components/SidebarNavigation.tsx
-// Desktop & Tablet Left Sidebar Navigation matching Figma Redesign
+// Desktop Left Sidebar Navigation matching Figma Redesign
 // Contains RRBM Branding, 4 Main Tabs, Live Alert Indicators & Integrated Management Desk
 
 import React from 'react';
 import { TabType } from '../types/navigation';
-import { Home, Bell, Music, Coins, Lock, Radio, ShieldCheck, Wifi } from 'lucide-react';
+import { Home, Bell, Music, Coins, Lock, Radio } from 'lucide-react';
 import rrbLogo from '../assets/rrb_logo.png';
 import { realtimeStore } from '../services/realtimeStore';
 
@@ -42,28 +42,13 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
   ];
 
   return (
-    <aside 
-      className="hidden md:flex flex-col w-64 lg:w-72 shrink-0 h-screen sticky top-0 z-30 select-none"
-      style={{
-        background: '#090F1E',
-        borderRight: '1px solid rgba(255, 255, 255, 0.08)'
-      }}
-      aria-label="Desktop Navigation"
-    >
+    <aside className="desktop-sidebar select-none" aria-label="Desktop Navigation">
       {/* 1. Ministry Brand Header */}
-      <div className="p-5 pb-4 flex items-center gap-3 border-b border-slate-800/80">
-        <div 
-          className="w-11 h-11 rounded-2xl flex items-center justify-center p-1.5 shrink-0"
-          style={{
-            background: '#101726',
-            border: '1px solid rgba(56, 189, 248, 0.28)',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)'
-          }}
-        >
+      <div className="p-5 pb-4 flex items-center gap-3 border-b border-slate-800">
+        <div className="sidebar-logo-box">
           <img 
             src={rrbLogo} 
             alt="RRBM Logo" 
-            className="w-full h-full object-contain"
           />
         </div>
 
@@ -90,7 +75,7 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
       </div>
 
       {/* 2. Navigation Menu Links */}
-      <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">
+      <nav className="flex-1 px-3 py-4 overflow-y-auto">
         <div className="px-3 pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
           Main Navigation
         </div>
@@ -103,20 +88,9 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
             <button
               key={item.id}
               type="button"
+              id={`sidebar-nav-${item.id}`}
               onClick={() => onTabChange(item.id)}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl cursor-pointer transition-all ${
-                isActive 
-                  ? 'text-white font-bold shadow-md' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60 font-medium'
-              }`}
-              style={
-                isActive
-                  ? {
-                      background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
-                      boxShadow: '0 4px 14px rgba(2, 132, 199, 0.35)'
-                    }
-                  : {}
-              }
+              className={`sidebar-nav-item ${isActive ? 'is-active' : ''}`}
               aria-current={isActive ? 'page' : undefined}
             >
               <div className="flex items-center gap-3">
@@ -148,7 +122,7 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
       </nav>
 
       {/* 3. Bottom Section: Management Desk & Connection Status */}
-      <div className="p-3 border-t border-slate-800/80 space-y-2">
+      <div className="p-3 border-t border-slate-800 space-y-2">
         {/* Management Desk Trigger */}
         <button
           type="button"

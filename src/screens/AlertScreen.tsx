@@ -99,16 +99,15 @@ export const AlertScreen: React.FC = () => {
 
     setIsSigningIn(true);
     setLoginError('');
-    await requestNotificationPermission();
+
     try {
-      await realtimeStore.signInVolunteer(id, pwd);
-      setVolunteerIdInput('');
-      setPasswordInput('');
-      showToast('success', 'Signed in successfully as volunteer!');
+      const vol = await realtimeStore.signInVolunteer(id, pwd);
+      if (vol) {
+        showToast('success', `Welcome back, ${vol.name}!`);
+        await requestNotificationPermission();
+      }
     } catch (err: any) {
-      const msg = err.message || 'Invalid Volunteer ID or password.';
-      setLoginError(msg);
-      showToast('error', msg);
+      setLoginError(err.message || 'Authentication error.');
     } finally {
       setIsSigningIn(false);
     }
@@ -116,26 +115,27 @@ export const AlertScreen: React.FC = () => {
 
   const handleOneTapAlert = async () => {
     if (isAlertBroadcasting) return;
+
     setIsAlertBroadcasting(true);
     try {
-      await realtimeStore.triggerImmediateAlert();
-      showToast('success', '🚨 Alert broadcasted to all registered team volunteers!');
+      await realtimeStore.triggerImmediateAlert('All volunteers urgently required at the main auditorium.');
+      showToast('success', 'Urgent push alert broadcast to all volunteers!');
     } catch (err: any) {
-      showToast('error', err.message || 'Alert failed to reach server. Please check connection.');
+      showToast('error', err.message || 'Failed to broadcast alert.');
     } finally {
-      setTimeout(() => {
-        setIsAlertBroadcasting(false);
-      }, 3000);
+      setIsAlertBroadcasting(false);
     }
   };
 
   const handleQuickResponse = async (type: 'coming' | 'coming_late' | 'not_coming') => {
+    if (!currentVolunteer || !activeAlert) return;
+
     setUserSelectedResponse(type);
     try {
       await realtimeStore.sendQuickResponse(type);
-      showToast('success', 'Your response has been registered.');
+      showToast('success', 'Your response has been logged.');
     } catch (err: any) {
-      showToast('error', err.message || 'Could not send response. Retrying...');
+      showToast('error', err.message || 'Could not send response.');
     }
   };
 
@@ -158,7 +158,7 @@ export const AlertScreen: React.FC = () => {
   // If user is not signed in as a volunteer, render the login card inside Alerts
   if (!currentVolunteer) {
     return (
-      <div className="alert-screen flex flex-col w-full space-y-4 pb-4 select-none max-w-4xl mx-auto">
+      <div className="alert-screen flex flex-col w-full space-y-4 pb-4 select-none max-w-lg mx-auto">
         {/* Header */}
         <div className="w-full flex items-center justify-between pt-1">
           <div className="flex flex-col">
@@ -190,8 +190,8 @@ export const AlertScreen: React.FC = () => {
           <div 
             className={`w-full p-2.5 rounded-xl text-xs flex items-center gap-2 ${
               statusFeedback.type === 'success' 
-                ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-200' 
-                : 'bg-rose-500/20 border border-rose-500/40 text-rose-200'
+                ? 'bg-emerald-600 text-white' 
+                : 'bg-rose-600 text-white'
             }`}
           >
             {statusFeedback.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
@@ -201,11 +201,10 @@ export const AlertScreen: React.FC = () => {
 
         {/* Volunteer Sign-In Card */}
         <div 
-          className="w-full rounded-2xl p-5 flex flex-col items-center text-center space-y-3.5"
+          className="clean-card w-full p-6 flex flex-col items-center text-center space-y-4"
           style={{
             background: '#101726',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)'
+            border: '1px solid rgba(255, 255, 255, 0.08)'
           }}
         >
           <div 
@@ -223,7 +222,10 @@ export const AlertScreen: React.FC = () => {
           </div>
 
           {loginError && (
-            <div className="w-full p-2.5 rounded-xl text-xs flex items-center gap-2 bg-rose-500/20 border border-rose-500/40 text-rose-200 text-left">
+            <div 
+              className="w-full p-2.5 rounded-xl text-xs flex items-center gap-2 text-rose-200 text-left"
+              style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)' }}
+            >
               <AlertCircle size={16} className="shrink-0 text-rose-400" />
               <span>{loginError}</span>
             </div>
@@ -239,7 +241,7 @@ export const AlertScreen: React.FC = () => {
                 value={volunteerIdInput}
                 onChange={(e) => setVolunteerIdInput(e.target.value)}
                 placeholder="Volunteer ID (e.g. 001, 002, 261)"
-                className="w-full py-2.5 pl-9 pr-3.5 rounded-xl text-xs text-white placeholder-slate-500 outline-none font-mono"
+                className="w-full py-2.5 pl-9 pr-3.5 rounded-xl text-xs text-white placeholder-slate-500 font-mono"
                 style={{ background: '#070D1D', border: '1px solid rgba(56, 189, 248, 0.25)' }}
                 autoCapitalize="none"
                 required
@@ -255,7 +257,7 @@ export const AlertScreen: React.FC = () => {
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
                 placeholder="Password"
-                className="w-full py-2.5 pl-9 pr-10 rounded-xl text-xs text-white placeholder-slate-500 outline-none"
+                className="w-full py-2.5 pl-9 pr-10 rounded-xl text-xs text-white placeholder-slate-500"
                 style={{ background: '#070D1D', border: '1px solid rgba(56, 189, 248, 0.25)' }}
                 required
               />
@@ -295,7 +297,7 @@ export const AlertScreen: React.FC = () => {
     );
   }
 
-  // Volunteer is signed in: Render authoritative Screen 2
+  // Volunteer is signed in: Render Screen 2
   return (
     <div className="alert-screen flex flex-col w-full space-y-4 pb-4 select-none max-w-4xl mx-auto">
       {/* 1. Top Header with Date, Title & Volunteer Avatar Pill */}
@@ -345,7 +347,7 @@ export const AlertScreen: React.FC = () => {
             className="text-slate-400 hover:text-rose-400 p-1 cursor-pointer"
             title="Sign out"
           >
-            <LogOut size={15} />
+            <LogOut size={16} />
           </button>
         </div>
       </div>
@@ -355,8 +357,8 @@ export const AlertScreen: React.FC = () => {
         <div 
           className={`w-full p-2.5 rounded-xl text-xs flex items-center gap-2 ${
             statusFeedback.type === 'success' 
-              ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-200' 
-              : 'bg-rose-500/20 border border-rose-500/40 text-rose-200'
+              ? 'bg-emerald-600 text-white' 
+              : 'bg-rose-600 text-white'
           }`}
         >
           {statusFeedback.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
@@ -364,13 +366,12 @@ export const AlertScreen: React.FC = () => {
         </div>
       )}
 
-      {/* 2. Volunteer Alert Card */}
+      {/* 2. Volunteer Alert Status Header Card */}
       <div 
-        className="w-full rounded-2xl p-3.5 flex items-center justify-between"
+        className="clean-card w-full p-4 flex items-center justify-between"
         style={{
           background: '#101726',
-          border: '1px solid rgba(255, 255, 255, 0.06)',
-          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)'
+          border: '1px solid rgba(255, 255, 255, 0.08)'
         }}
       >
         <div className="flex items-center gap-3">
@@ -406,49 +407,28 @@ export const AlertScreen: React.FC = () => {
 
       {/* 3. Central Circular Alert Button with Concentric Rings */}
       <div 
-        className="w-full rounded-2xl p-6 flex flex-col items-center justify-center text-center relative overflow-hidden"
+        className="clean-card w-full p-6 flex flex-col items-center justify-center text-center relative overflow-hidden"
         style={{
           background: '#101726',
-          border: '1px solid rgba(255, 255, 255, 0.06)',
-          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)'
+          border: '1px solid rgba(255, 255, 255, 0.08)'
         }}
       >
         {/* Concentric Circle Visual Frame */}
-        <div className="relative flex items-center justify-center my-3">
-          {/* Outermost ring */}
-          <div 
-            className="w-48 h-48 rounded-full flex items-center justify-center"
-            style={{
-              border: '1px solid rgba(56, 189, 248, 0.12)'
-            }}
-          >
-            {/* Middle ring */}
-            <div 
-              className="w-36 h-36 rounded-full flex items-center justify-center"
-              style={{
-                border: '1px solid rgba(56, 189, 248, 0.22)',
-                background: 'rgba(56, 189, 248, 0.03)'
-              }}
+        <div className="concentric-outer my-3">
+          <div className="concentric-mid">
+            <button
+              type="button"
+              id="alert-screen-main-btn"
+              onClick={handleOneTapAlert}
+              disabled={isAlertBroadcasting}
+              className={`concentric-button ${activeAlert ? 'is-active-alert' : ''}`}
+              aria-label="Send push notification alert"
             >
-              {/* Center Action Button */}
-              <button
-                type="button"
-                onClick={handleOneTapAlert}
-                disabled={isAlertBroadcasting}
-                className="w-24 h-24 rounded-full flex flex-col items-center justify-center cursor-pointer transition-transform active:scale-90"
-                style={{
-                  background: '#090F1E',
-                  border: '2px solid #38BDF8',
-                  boxShadow: '0 0 24px rgba(56, 189, 248, 0.35)'
-                }}
-                aria-label="Send push notification alert"
-              >
-                <Megaphone size={24} className="text-sky-400 mb-1" />
-                <span className="text-xs font-bold text-sky-400">
-                  Alert
-                </span>
-              </button>
-            </div>
+              <Megaphone size={24} className={activeAlert ? 'text-rose-400' : 'text-sky-400'} />
+              <span className={`text-xs font-bold mt-1 ${activeAlert ? 'text-rose-400' : 'text-sky-400'}`}>
+                Alert
+              </span>
+            </button>
           </div>
         </div>
 
@@ -477,15 +457,16 @@ export const AlertScreen: React.FC = () => {
             </div>
 
             {/* Quick 3-Response Buttons */}
-            <div className="grid grid-cols-3 gap-1.5 pt-1">
+            <div className="grid grid-cols-3 gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => handleQuickResponse('coming')}
                 className={`py-2 px-1 rounded-xl text-center cursor-pointer transition-all ${
                   userSelectedResponse === 'coming'
-                    ? 'bg-emerald-600 text-white font-bold shadow'
-                    : 'bg-emerald-950/60 text-emerald-300 font-semibold border border-emerald-500/30'
+                    ? 'bg-emerald-600 text-white font-bold'
+                    : 'bg-emerald-950 text-emerald-300 font-semibold border border-emerald-500'
                 }`}
+                style={{ background: userSelectedResponse === 'coming' ? '#059669' : 'rgba(6, 78, 59, 0.6)' }}
               >
                 <CheckCircle2 size={13} className="mx-auto mb-0.5" />
                 <span className="text-[10px] block leading-tight">I'm Coming</span>
@@ -496,9 +477,10 @@ export const AlertScreen: React.FC = () => {
                 onClick={() => handleQuickResponse('coming_late')}
                 className={`py-2 px-1 rounded-xl text-center cursor-pointer transition-all ${
                   userSelectedResponse === 'coming_late'
-                    ? 'bg-amber-600 text-white font-bold shadow'
-                    : 'bg-amber-950/60 text-amber-300 font-semibold border border-amber-500/30'
+                    ? 'bg-amber-600 text-white font-bold'
+                    : 'bg-amber-950 text-amber-300 font-semibold border border-amber-500'
                 }`}
+                style={{ background: userSelectedResponse === 'coming_late' ? '#D97706' : 'rgba(120, 53, 15, 0.6)' }}
               >
                 <Clock size={13} className="mx-auto mb-0.5" />
                 <span className="text-[10px] block leading-tight">Coming Late</span>
@@ -509,9 +491,10 @@ export const AlertScreen: React.FC = () => {
                 onClick={() => handleQuickResponse('not_coming')}
                 className={`py-2 px-1 rounded-xl text-center cursor-pointer transition-all ${
                   userSelectedResponse === 'not_coming'
-                    ? 'bg-rose-700 text-white font-bold shadow'
-                    : 'bg-rose-950/60 text-rose-300 font-semibold border border-rose-500/30'
+                    ? 'bg-rose-700 text-white font-bold'
+                    : 'bg-rose-950 text-rose-300 font-semibold border border-rose-500'
                 }`}
+                style={{ background: userSelectedResponse === 'not_coming' ? '#BE123C' : 'rgba(136, 19, 55, 0.6)' }}
               >
                 <XCircle size={13} className="mx-auto mb-0.5" />
                 <span className="text-[10px] block leading-tight">Can't Come</span>
@@ -534,11 +517,10 @@ export const AlertScreen: React.FC = () => {
 
         {/* Group 1: Worship Team */}
         <div 
-          className="w-full rounded-2xl p-3.5 flex items-center justify-between"
+          className="clean-card w-full p-3.5 flex items-center justify-between"
           style={{
             background: '#101726',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)'
+            border: '1px solid rgba(255, 255, 255, 0.08)'
           }}
         >
           <div className="flex items-center gap-3">
@@ -568,11 +550,10 @@ export const AlertScreen: React.FC = () => {
 
         {/* Group 2: Children's Ministry */}
         <div 
-          className="w-full rounded-2xl p-3.5 flex items-center justify-between"
+          className="clean-card w-full p-3.5 flex items-center justify-between"
           style={{
             background: '#101726',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)'
+            border: '1px solid rgba(255, 255, 255, 0.08)'
           }}
         >
           <div className="flex items-center gap-3">
@@ -602,11 +583,10 @@ export const AlertScreen: React.FC = () => {
 
         {/* Group 3: Greeters & Ushers */}
         <div 
-          className="w-full rounded-2xl p-3.5 flex items-center justify-between"
+          className="clean-card w-full p-3.5 flex items-center justify-between"
           style={{
             background: '#101726',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)'
+            border: '1px solid rgba(255, 255, 255, 0.08)'
           }}
         >
           <div className="flex items-center gap-3">
@@ -635,13 +615,12 @@ export const AlertScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* 5. Live Coordination Chat Accordion */}
+      {/* 5. Live Coordination Chat Drawer */}
       <div 
-        className="w-full rounded-2xl p-3.5 flex flex-col space-y-2.5"
+        className="clean-card w-full p-3.5 flex flex-col space-y-2.5"
         style={{
           background: '#101726',
-          border: '1px solid rgba(255, 255, 255, 0.06)',
-          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)'
+          border: '1px solid rgba(255, 255, 255, 0.08)'
         }}
       >
         <button
@@ -700,7 +679,7 @@ export const AlertScreen: React.FC = () => {
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 placeholder="Type coordination message..."
-                className="flex-1 py-2 px-3 rounded-xl text-xs text-white placeholder-slate-500 outline-none"
+                className="flex-1 py-2 px-3 rounded-xl text-xs text-white placeholder-slate-500"
                 style={{ background: '#070D1D', border: '1px solid rgba(56, 189, 248, 0.2)' }}
               />
               <button

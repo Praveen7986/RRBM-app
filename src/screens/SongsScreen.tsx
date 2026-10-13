@@ -299,9 +299,7 @@ export const SongsScreen: React.FC = () => {
 
       {/* 5. Docked Bottom "NOW PLAYING" Panel (Matching Reference Screen 3) */}
       {nowPlayingSong && (
-        <div 
-          className="fixed bottom-16 md:bottom-5 left-0 right-0 z-30 max-w-md md:max-w-2xl mx-auto p-2"
-        >
+        <div className="now-playing-dock">
           <div 
             className="w-full rounded-2xl p-3 flex items-center justify-between shadow-2xl"
             style={{

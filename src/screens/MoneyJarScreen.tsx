@@ -65,7 +65,10 @@ export const MoneyJarScreen: React.FC = () => {
           boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)'
         }}
       >
-        <div className="w-full h-56 sm:h-64 rounded-xl overflow-hidden relative shadow-inner">
+        <div 
+          className="w-full rounded-xl overflow-hidden relative shadow-inner"
+          style={{ height: '220px', minHeight: '220px', maxHeight: '220px' }}
+        >
           <img
             src={offeringRainImg}
             alt="Fasting offering hands"

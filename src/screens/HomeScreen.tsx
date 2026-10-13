@@ -16,14 +16,12 @@ import {
   CheckCircle2,
   XCircle,
   Play,
-  Volume2,
   Sparkles,
   Ticket
 } from 'lucide-react';
 import { TabType } from '../types/navigation';
-import rrbLogo from '../assets/rrb_logo.png';
 import { realtimeStore } from '../services/realtimeStore';
-import { SONGS_DATA, SongItem } from '../data/songsData';
+import { SONGS_DATA } from '../data/songsData';
 
 interface HomeScreenProps {
   onNavigate?: (tab: TabType) => void;
@@ -71,16 +69,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
   const previewSongs = SONGS_DATA.day2.slice(0, 3);
 
   return (
-    <div className="home-screen flex flex-col w-full space-y-5 pb-6 select-none max-w-6xl mx-auto">
+    <div className="home-screen flex flex-col w-full space-y-5 pb-6 select-none">
       {/* 1. Top Greeting Header (Figma Design) */}
       <div className="w-full flex items-start justify-between pt-1">
         <div className="flex flex-col">
           <div className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-sky-400 uppercase tracking-widest mb-1">
-            <Sparkles size={12} className="text-sky-400" />
+            <Sparkles size={13} className="text-sky-400" />
             <span>October 20–22, 2026 &bull; Three-Day Festival</span>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight">
+          <h1 className="text-2xl sm:text-3xl text-4xl font-black text-white tracking-tight leading-tight">
             Welcome to RRBM
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-xl">
@@ -92,7 +90,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
         <button
           type="button"
           onClick={() => onNavigate && onNavigate('alert')}
-          className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center text-slate-300 hover:text-white cursor-pointer transition-all active:scale-95"
+          className="relative w-11 h-11 rounded-2xl flex items-center justify-center text-slate-300 hover:text-white cursor-pointer transition-all active:scale-95 shrink-0"
           style={{
             background: '#101726',
             border: activeAlert ? '1px solid rgba(244, 63, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
@@ -109,14 +107,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
       </div>
 
       {/* 2. Hero Event Card: Three-Day Fasting Prayer with "D3" Watermark */}
-      <div 
-        className="w-full rounded-3xl p-5 sm:p-6 lg:p-7 flex flex-col justify-between relative overflow-hidden space-y-4"
-        style={{
-          background: 'linear-gradient(135deg, #0F1F42 0%, #081124 100%)',
-          border: '1px solid rgba(56, 189, 248, 0.25)',
-          boxShadow: '0 12px 36px rgba(0, 0, 0, 0.55)'
-        }}
-      >
+      <div className="hero-event-card p-5 sm:p-6 p-7 flex flex-col justify-between space-y-4">
         {/* Ambient Top Glow */}
         <div 
           className="absolute -top-20 -right-20 w-64 h-64 rounded-full pointer-events-none" 
@@ -124,15 +115,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
         />
 
         {/* "D3" Watermark matching Figma */}
-        <div 
-          className="absolute top-4 right-6 font-black font-mono text-5xl sm:text-6xl lg:text-7xl pointer-events-none select-none text-sky-400/10 tracking-tighter"
-          aria-hidden="true"
-        >
+        <div className="hero-watermark" aria-hidden="true">
           D3
         </div>
 
         {/* Top Badges */}
-        <div className="flex items-center gap-2 relative z-10">
+        <div className="flex items-center gap-2 relative z-10 flex-wrap">
           <div 
             className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold"
             style={{
@@ -146,7 +134,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           </div>
 
           <div 
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold"
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold"
             style={{
               background: 'rgba(56, 189, 248, 0.12)',
               border: '1px solid rgba(56, 189, 248, 0.28)',
@@ -159,17 +147,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
         </div>
 
         {/* Title and Description */}
-        <div className="relative z-10 space-y-1">
-          <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-white tracking-tight">
+        <div className="relative z-10 space-y-1.5">
+          <h2 className="text-xl sm:text-2xl text-3xl font-black text-white tracking-tight">
             Three-Day Fasting Prayer
           </h2>
-          <p className="text-xs sm:text-sm text-slate-300/90 leading-relaxed max-w-2xl">
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl">
             Reviving lives through Christ Jesus with three days of dedicated fasting, worship and prayer. Join with believers across Vijayawada and worldwide.
           </p>
         </div>
 
         {/* Metadata Footer */}
-        <div className="flex flex-wrap items-center gap-4 sm:gap-6 pt-3 text-xs sm:text-sm text-slate-300 border-t border-slate-700/50 relative z-10">
+        <div 
+          className="flex flex-wrap items-center gap-4 sm:gap-6 pt-3 text-xs sm:text-sm text-slate-300 border-t relative z-10"
+          style={{ borderColor: 'rgba(255, 255, 255, 0.08)' }}
+        >
           <div className="flex items-center gap-2">
             <Calendar size={15} className="text-sky-400 shrink-0" />
             <span className="font-semibold">Oct 20–22, 2026</span>
@@ -181,7 +172,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* 3. Quick Actions Section (3 Cards in Grid) */}
+      {/* 3. Quick Actions Section (3 Cards in Responsive Grid) */}
       <div className="w-full flex flex-col space-y-3">
         <div className="flex items-baseline justify-between px-0.5">
           <div>
@@ -194,16 +185,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           </div>
         </div>
 
-        <div className="w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
+        <div className="quick-actions-grid">
           {/* Action 1: Alerts */}
           <button
             type="button"
+            id="quick-action-alerts"
             onClick={() => onNavigate && onNavigate('alert')}
-            className="rounded-2xl p-4 flex items-center justify-between text-left cursor-pointer transition-all active:scale-[0.98] hover:border-sky-400/40"
+            className="rounded-2xl p-4 flex items-center justify-between text-left cursor-pointer transition-all clean-card"
             style={{
               background: '#101726',
-              border: activeAlert ? '1px solid rgba(244, 63, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.06)',
-              boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)'
+              border: activeAlert ? '1px solid rgba(244, 63, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)'
             }}
           >
             <div className="flex items-center gap-3.5">
@@ -237,18 +228,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
               </div>
             </div>
 
-            <ChevronRight size={18} className="text-slate-400" />
+            <ChevronRight size={18} className="text-slate-400 shrink-0" />
           </button>
 
           {/* Action 2: Songs */}
           <button
             type="button"
+            id="quick-action-songs"
             onClick={() => onNavigate && onNavigate('songs')}
-            className="rounded-2xl p-4 flex items-center justify-between text-left cursor-pointer transition-all active:scale-[0.98] hover:border-sky-400/40"
+            className="rounded-2xl p-4 flex items-center justify-between text-left cursor-pointer transition-all clean-card"
             style={{
               background: '#101726',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-              boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)'
+              border: '1px solid rgba(255, 255, 255, 0.08)'
             }}
           >
             <div className="flex items-center gap-3.5">
@@ -282,18 +273,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
               </div>
             </div>
 
-            <ChevronRight size={18} className="text-slate-400" />
+            <ChevronRight size={18} className="text-slate-400 shrink-0" />
           </button>
 
           {/* Action 3: Money Jar */}
           <button
             type="button"
+            id="quick-action-money"
             onClick={() => onNavigate && onNavigate('money')}
-            className="rounded-2xl p-4 flex items-center justify-between text-left cursor-pointer transition-all active:scale-[0.98] hover:border-sky-400/40"
+            className="rounded-2xl p-4 flex items-center justify-between text-left cursor-pointer transition-all clean-card"
             style={{
               background: '#101726',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-              boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)'
+              border: '1px solid rgba(255, 255, 255, 0.08)'
             }}
           >
             <div className="flex items-center gap-3.5">
@@ -327,20 +318,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
               </div>
             </div>
 
-            <ChevronRight size={18} className="text-slate-400" />
+            <ChevronRight size={18} className="text-slate-400 shrink-0" />
           </button>
         </div>
       </div>
 
       {/* 4. Lower Dashboard Grid: Volunteer Alert + Worship Songs */}
-      <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div className="dashboard-lower-grid">
         {/* Left Column: Volunteer Alert Card */}
         <div 
-          className="lg:col-span-5 rounded-2xl p-5 flex flex-col justify-between space-y-4"
+          className="clean-card p-5 flex flex-col justify-between space-y-4"
           style={{
             background: '#101726',
-            border: activeAlert ? '1px solid rgba(244, 63, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.06)',
-            boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)'
+            border: activeAlert ? '1px solid rgba(244, 63, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)'
           }}
         >
           <div className="flex items-center justify-between">
@@ -363,35 +353,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
 
           {/* Central Concentric Circular Alert Trigger */}
           <div className="flex flex-col items-center text-center py-2">
-            <div className="relative flex items-center justify-center my-1">
-              <div 
-                className="w-32 h-32 rounded-full flex items-center justify-center"
-                style={{ border: '1px solid rgba(56, 189, 248, 0.15)' }}
-              >
-                <div 
-                  className="w-24 h-24 rounded-full flex items-center justify-center"
-                  style={{ 
-                    border: '1px solid rgba(56, 189, 248, 0.25)', 
-                    background: 'rgba(56, 189, 248, 0.04)' 
-                  }}
+            <div className="concentric-outer my-1">
+              <div className="concentric-mid">
+                <button
+                  type="button"
+                  id="home-alert-circle-btn"
+                  onClick={() => onNavigate && onNavigate('alert')}
+                  className={`concentric-button ${activeAlert ? 'is-active-alert' : ''}`}
+                  aria-label="Open Alert"
                 >
-                  <button
-                    type="button"
-                    onClick={() => onNavigate && onNavigate('alert')}
-                    className="w-16 h-16 rounded-full flex flex-col items-center justify-center cursor-pointer transition-transform active:scale-90"
-                    style={{
-                      background: '#090F1E',
-                      border: '2px solid #38BDF8',
-                      boxShadow: '0 0 18px rgba(56, 189, 248, 0.35)'
-                    }}
-                    aria-label="Open Alert"
-                  >
-                    <Megaphone size={18} className="text-sky-400 mb-0.5" />
-                    <span className="text-[10px] font-bold text-sky-400">
-                      Alert
-                    </span>
-                  </button>
-                </div>
+                  <Megaphone size={20} className={activeAlert ? 'text-rose-400' : 'text-sky-400'} />
+                  <span className={`text-[10px] font-bold mt-1 ${activeAlert ? 'text-rose-400' : 'text-sky-400'}`}>
+                    Alert
+                  </span>
+                </button>
               </div>
             </div>
 
@@ -421,8 +396,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
                   className={`py-1.5 text-center rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
                     selectedResponse === 'coming'
                       ? 'bg-emerald-600 text-white'
-                      : 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/30'
+                      : 'bg-emerald-950 text-emerald-300 border border-emerald-500'
                   }`}
+                  style={{ background: selectedResponse === 'coming' ? '#059669' : 'rgba(6, 78, 59, 0.6)' }}
                 >
                   <CheckCircle2 size={12} className="mx-auto mb-0.5" />
                   <span>I'm Coming</span>
@@ -434,8 +410,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
                   className={`py-1.5 text-center rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
                     selectedResponse === 'coming_late'
                       ? 'bg-amber-600 text-white'
-                      : 'bg-amber-950/60 text-amber-300 border border-amber-500/30'
+                      : 'bg-amber-950 text-amber-300 border border-amber-500'
                   }`}
+                  style={{ background: selectedResponse === 'coming_late' ? '#D97706' : 'rgba(120, 53, 15, 0.6)' }}
                 >
                   <Clock size={12} className="mx-auto mb-0.5" />
                   <span>Coming Late</span>
@@ -447,8 +424,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
                   className={`py-1.5 text-center rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
                     selectedResponse === 'not_coming'
                       ? 'bg-rose-700 text-white'
-                      : 'bg-rose-950/60 text-rose-300 border border-rose-500/30'
+                      : 'bg-rose-950 text-rose-300 border border-rose-500'
                   }`}
+                  style={{ background: selectedResponse === 'not_coming' ? '#BE123C' : 'rgba(136, 19, 55, 0.6)' }}
                 >
                   <XCircle size={12} className="mx-auto mb-0.5" />
                   <span>Can't Come</span>
@@ -474,11 +452,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
 
         {/* Right Column: Worship Songs Preview Card */}
         <div 
-          className="lg:col-span-7 rounded-2xl p-5 flex flex-col justify-between space-y-3"
+          className="clean-card p-5 flex flex-col justify-between space-y-3"
           style={{
             background: '#101726',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)'
+            border: '1px solid rgba(255, 255, 255, 0.08)'
           }}
         >
           <div className="flex items-center justify-between">
@@ -503,14 +480,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
 
           {/* Songs List */}
           <div className="space-y-2 pt-1 flex-1">
-            {previewSongs.map((song, idx) => (
+            {previewSongs.map((song) => (
               <div
                 key={song.id}
                 onClick={() => onNavigate && onNavigate('songs')}
-                className="p-3 rounded-xl flex items-center justify-between cursor-pointer transition-all hover:bg-slate-800/60 active:scale-[0.99]"
+                className="p-3 rounded-xl flex items-center justify-between cursor-pointer transition-all hover:bg-slate-800"
                 style={{
                   background: 'rgba(6, 11, 24, 0.65)',
-                  border: '1px solid rgba(255, 255, 255, 0.04)'
+                  border: '1px solid rgba(255, 255, 255, 0.05)'
                 }}
               >
                 <div className="flex items-center gap-3 overflow-hidden">

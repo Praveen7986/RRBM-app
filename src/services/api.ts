@@ -15,25 +15,29 @@ export function getServerBaseUrl(): string {
     return customUrl.trim().replace(/\/+$/, '');
   }
 
-  // 2. Build-time environment variable (e.g. from .env.production or .env)
-  const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl && envUrl.trim()) {
-    return envUrl.trim().replace(/\/+$/, '');
-  }
-
-  // 3. If running inside native Android WebView (Capacitor/localhost), point to the network server
+  // 2. Check if running inside native Android / iOS WebView (Capacitor / Ionic)
   const isCapacitor = 
     window.location.protocol === 'capacitor:' || 
-    window.location.protocol === 'ionic:' || 
-    window.location.hostname === 'localhost' || 
-    window.location.hostname === '127.0.0.1';
+    window.location.protocol === 'ionic:';
 
   if (isCapacitor) {
+    const envUrl = import.meta.env.VITE_API_URL;
+    if (envUrl && envUrl.trim()) {
+      return envUrl.trim().replace(/\/+$/, '');
+    }
     return DEFAULT_FALLBACK_SERVER;
   }
 
-  // 4. In web browser on public domain or port
-  return window.location.origin;
+  // 3. Web browser environment (e.g., Render deployment, localhost, or LAN web)
+  // When running in a standard web browser (http: or https:), use current origin.
+  // - On Render: origin is "https://rrbm-app.onrender.com" -> /api calls match origin
+  // - On local Node server (port 3000): origin is "http://localhost:3000" or "http://127.0.0.1:3000"
+  // - On Vite dev server (port 5173): origin is "http://localhost:5173", which Vite proxies to port 3000
+  if (window.location.origin && window.location.origin !== 'null') {
+    return window.location.origin;
+  }
+
+  return DEFAULT_FALLBACK_SERVER;
 }
 
 export function setCustomServerUrl(url: string): void {

@@ -81,16 +81,26 @@ class RealtimeStoreService {
           this.currentVolunteer = authenticatedVolunteer;
           localStorage.setItem(STORAGE_KEYS.CURRENT_VOLUNTEER, JSON.stringify(authenticatedVolunteer));
           this.attachFirestoreListeners();
+          this.notify();
         } else {
-          this.currentVolunteer = null;
-          localStorage.removeItem(STORAGE_KEYS.CURRENT_VOLUNTEER);
+          // If Firebase Auth has no active user, only clean up Firebase Firestore listeners.
+          // Do NOT wipe currentVolunteer if authenticated via backend session.
           firebaseRealtime.cleanup();
+          const hasBackendSession = localStorage.getItem('rrbm_volunteer_token');
+          if (!hasBackendSession && !localStorage.getItem(STORAGE_KEYS.CURRENT_VOLUNTEER)) {
+            this.currentVolunteer = null;
+            this.notify();
+          }
         }
-        this.notify();
       });
 
       if (this.currentVolunteer) {
         this.attachFirestoreListeners();
+      }
+
+      // Ensure WebSocket connection is active for real-time alerts
+      if (!this.ws) {
+        this.connectWebSocket();
       }
 
       this.notify();
@@ -460,19 +470,15 @@ class RealtimeStoreService {
       throw new Error('Please enter your password.');
     }
 
-    // Cloud Mode via Firebase Authentication
-    if (this.isCloudFirebaseMode) {
-      const vol = await firebaseRealtime.signInVolunteer(trimmedId, cleanPassword);
-      this.currentVolunteer = vol;
-      localStorage.setItem(STORAGE_KEYS.CURRENT_VOLUNTEER, JSON.stringify(vol));
-      this.notify();
-      return vol;
-    }
-
-    // Node Server Authentication
+    // Authoritative Backend Authentication via /api/volunteers/login
     try {
       const res = await apiClient.loginVolunteer(trimmedId, cleanPassword);
       if (res.success && res.volunteer) {
+        if (res.token) {
+          localStorage.setItem('rrbm_volunteer_token', res.token);
+        }
+
+        // If backend returned a Firebase custom token, attach Firebase Auth session
         if (res.customToken) {
           const { auth } = getFirebaseServices();
           if (auth) {
@@ -483,14 +489,66 @@ class RealtimeStoreService {
             }
           }
         }
+
         this.currentVolunteer = res.volunteer;
         localStorage.setItem(STORAGE_KEYS.CURRENT_VOLUNTEER, JSON.stringify(res.volunteer));
+
+        // Connect real-time listeners
+        if (this.isCloudFirebaseMode && res.customToken) {
+          this.attachFirestoreListeners();
+        }
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+          this.connectWebSocket();
+          this.fetchInitialData();
+        }
+
         this.notify();
         return res.volunteer;
       }
       throw new Error('Server returned invalid volunteer response.');
     } catch (err: any) {
-      throw new Error(err.message || 'Failed to sign in. Check your credentials or internet connection.');
+      const errMsg = err.message || '';
+
+      // If backend explicitly rejected credentials or account status (400, 401, 403),
+      // we check Cloud Firebase Mode as fallback only if not an explicit deactivation.
+      if (
+        errMsg.includes('Invalid Volunteer ID or password') ||
+        errMsg.includes('deactivated') ||
+        errMsg.includes('not provisioned') ||
+        errMsg.includes('required')
+      ) {
+        if (this.isCloudFirebaseMode && !errMsg.includes('deactivated')) {
+          try {
+            const vol = await firebaseRealtime.signInVolunteer(trimmedId, cleanPassword);
+            this.currentVolunteer = vol;
+            localStorage.setItem(STORAGE_KEYS.CURRENT_VOLUNTEER, JSON.stringify(vol));
+            this.attachFirestoreListeners();
+            this.notify();
+            return vol;
+          } catch {
+            // Firebase Auth also rejected; throw authoritative backend message
+            throw new Error(errMsg);
+          }
+        }
+        throw new Error(errMsg);
+      }
+
+      // If backend network request failed (offline / network error),
+      // attempt Cloud Firebase Auth if available as offline fallback
+      if (this.isCloudFirebaseMode) {
+        try {
+          const vol = await firebaseRealtime.signInVolunteer(trimmedId, cleanPassword);
+          this.currentVolunteer = vol;
+          localStorage.setItem(STORAGE_KEYS.CURRENT_VOLUNTEER, JSON.stringify(vol));
+          this.attachFirestoreListeners();
+          this.notify();
+          return vol;
+        } catch (fbErr: any) {
+          throw new Error(fbErr.message || 'Authentication failed. Please check your network connection.');
+        }
+      }
+
+      throw new Error(errMsg || 'Failed to sign in. Check your credentials or internet connection.');
     }
   }
 
@@ -502,6 +560,7 @@ class RealtimeStoreService {
     }
     this.currentVolunteer = null;
     localStorage.removeItem(STORAGE_KEYS.CURRENT_VOLUNTEER);
+    localStorage.removeItem('rrbm_volunteer_token');
     this.notify();
   }
 
@@ -517,13 +576,18 @@ class RealtimeStoreService {
     const alertMsgText = customMessage || '🚨 PRAYER ALERT: Volunteers are requested to gather immediately!';
 
     try {
-      // Cloud Firebase Dispatch
-      if (this.isCloudFirebaseMode) {
-        const alert = await firebaseRealtime.triggerAlert(senderId, senderName, alertMsgText);
-        this.activeAlert = alert;
-        localStorage.setItem(STORAGE_KEYS.ACTIVE_ALERT, JSON.stringify(alert));
-        this.notify();
-        return { success: true, alert };
+      // Cloud Firebase Dispatch (if authenticated with Firebase)
+      const { auth } = getFirebaseServices();
+      if (this.isCloudFirebaseMode && auth?.currentUser) {
+        try {
+          const alert = await firebaseRealtime.triggerAlert(senderId, senderName, alertMsgText);
+          this.activeAlert = alert;
+          localStorage.setItem(STORAGE_KEYS.ACTIVE_ALERT, JSON.stringify(alert));
+          this.notify();
+          return { success: true, alert };
+        } catch (fbErr) {
+          console.warn('[RealtimeStore] Cloud Firebase alert failed, falling back to server:', fbErr);
+        }
       }
 
       // Node Server Dispatch
@@ -559,13 +623,18 @@ class RealtimeStoreService {
     }
 
     try {
-      if (this.isCloudFirebaseMode) {
-        await firebaseRealtime.sendQuickResponse(
-          this.currentVolunteer.id,
-          this.currentVolunteer.name,
-          responseType
-        );
-        return;
+      const { auth } = getFirebaseServices();
+      if (this.isCloudFirebaseMode && auth?.currentUser) {
+        try {
+          await firebaseRealtime.sendQuickResponse(
+            this.currentVolunteer.id,
+            this.currentVolunteer.name,
+            responseType
+          );
+          return;
+        } catch (fbErr) {
+          console.warn('[RealtimeStore] Cloud Firebase quick response failed, falling back to server:', fbErr);
+        }
       }
 
       const alertId = this.activeAlert ? this.activeAlert.id : 'current';
@@ -604,8 +673,13 @@ class RealtimeStoreService {
     const senderName = this.currentVolunteer ? this.currentVolunteer.name : 'Volunteer';
 
     try {
-      if (this.isCloudFirebaseMode) {
-        return await firebaseRealtime.sendChatMessage(volunteerId, senderName, trimmed);
+      const { auth } = getFirebaseServices();
+      if (this.isCloudFirebaseMode && auth?.currentUser) {
+        try {
+          return await firebaseRealtime.sendChatMessage(volunteerId, senderName, trimmed);
+        } catch (fbErr) {
+          console.warn('[RealtimeStore] Cloud Firebase chat failed, falling back to server:', fbErr);
+        }
       }
 
       const res = await apiClient.sendChatMessage(volunteerId, senderName, trimmed);
@@ -619,8 +693,8 @@ class RealtimeStoreService {
       }
       throw new Error('Failed to send message: Server did not return message confirmation.');
     } catch (err: any) {
-      console.error('[RealtimeStore] Live chat send failed:', err.message);
-      throw new Error(err.message || 'Could not send message. Please check connection.');
+      console.error('[RealtimeStore] Send chat failed:', err.message);
+      throw new Error(err.message || 'Failed to send message. Please try again.');
     }
   }
 

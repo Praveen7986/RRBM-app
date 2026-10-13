@@ -55,10 +55,15 @@ async function ensureServerRunning() {
 
   console.log('  Spawning local backend server for automated security testing...');
   const serverPath = path.join(ROOT_DIR, 'server', 'server.js');
-  spawnedServerProcess = spawn('node', [serverPath], {
+  spawnedServerProcess = spawn(process.execPath, [serverPath], {
     cwd: ROOT_DIR,
-    env: { ...process.env, PORT: String(PORT) },
-    stdio: 'ignore'
+    env: { ...process.env, PORT: String(PORT) }
+  });
+  spawnedServerProcess.stdout?.on('data', d => {
+    // console.log('    [Server]', d.toString().trim());
+  });
+  spawnedServerProcess.stderr?.on('data', d => {
+    console.error('    [Server STDERR]', d.toString().trim());
   });
 
   // Wait for server to become responsive
@@ -450,6 +455,40 @@ async function runSecurityTests() {
     })
   });
   assert(crossLoginRes.status === 401, 'Volunteer 2 cannot log in using Volunteer 1\'s password (cross-credential isolation)');
+
+  // 2.17 Frontend Contract Parity Validation
+  console.log('  Testing Frontend API Contract Parity & Error Message Structure...');
+  // 2.17.1 Missing credentials
+  const contractMissing = await fetch(`${BASE_URL}/api/volunteers/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ volunteerId: '', password: '' })
+  });
+  const contractMissingData = await contractMissing.json();
+  assert(contractMissing.status === 400, 'Frontend contract: missing credentials returns 400');
+  assert(contractMissingData.error === 'Volunteer ID and password are required', 'Frontend contract: 400 error message matches expectation');
+
+  // 2.17.2 Invalid credentials message
+  const contractBad = await fetch(`${BASE_URL}/api/volunteers/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ volunteerId: 'UNKNOWN_999', password: 'bad_password' })
+  });
+  const contractBadData = await contractBad.json();
+  assert(contractBad.status === 401, 'Frontend contract: unknown user returns 401');
+  assert(contractBadData.error === 'Invalid Volunteer ID or password', 'Frontend contract: 401 error message matches user-friendly expectation');
+
+  // 2.17.3 Successful response contract
+  const contractOk = await fetch(`${BASE_URL}/api/volunteers/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ volunteerId: testVolBId, password: testVolBPass })
+  });
+  const contractOkData = await contractOk.json();
+  assert(contractOk.status === 200, 'Frontend contract: valid login returns 200');
+  assert(contractOkData.success === true, 'Frontend contract: success flag is true');
+  assert(contractOkData.volunteer && contractOkData.volunteer.id === testVolBId, 'Frontend contract: volunteer.id matches request');
+  assert(typeof contractOkData.token === 'string', 'Frontend contract: session token is present');
 
   console.log('\n================================================================');
   console.log(`🎉 ALL ${passed}/${total} SECURITY & AUTHENTICATION TESTS PASSED SUCCESSFULLY!`);

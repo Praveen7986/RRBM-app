@@ -287,8 +287,8 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 select-none">
-      <div className="w-full max-w-md bg-[#0c152a] border border-sky-500/30 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 select-none" style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)' }}>
+      <div className="manager-modal-box">
         {/* Header */}
         <div className="p-4 bg-[#101c36] border-b border-sky-500/20 flex items-center justify-between">
           <div className="flex items-center gap-2">

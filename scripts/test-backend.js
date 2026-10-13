@@ -39,7 +39,7 @@ async function ensureServerRunning() {
 
   console.log('  Spawning local backend server for multi-device test...');
   const serverPath = path.join(ROOT_DIR, 'server', 'server.js');
-  spawnedServerProcess = spawn('node', [serverPath], {
+  spawnedServerProcess = spawn(process.execPath, [serverPath], {
     cwd: ROOT_DIR,
     env: { ...process.env, PORT: String(PORT) },
     stdio: 'ignore'
