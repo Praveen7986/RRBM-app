@@ -292,6 +292,44 @@ const DEFAULT_DB = {
     { id: 'EXP_1', date: '2026-10-20', purpose: 'Sound & Tent arrangement', amount: 25000, createdAt: '2026-10-20T10:00:00.000Z' },
     { id: 'EXP_2', date: '2026-10-21', purpose: 'Food & Refreshments for volunteers', amount: 18500, createdAt: '2026-10-21T12:30:00.000Z' },
     { id: 'EXP_3', date: '2026-10-22', purpose: 'Stage lighting and flower decoration', amount: 12000, createdAt: '2026-10-22T08:00:00.000Z' }
+  ],
+  songs: [
+    {
+      id: 'SONG_SEED_1',
+      title: 'యెహోవా నా బలమా (Yehovah Naa Balama)',
+      lyrics: `యెహోవా నా బలమా - యథార్థమైనది నీ మార్గం
+పరిపూర్ణమైనది నీ చిత్తం
+నా ప్రాణ ప్రియుడా నా ఆరాధనా
+నీకే చెల్లింతును స్తుతి గీతము
+
+[కోరస్]
+నన్ను ప్రేమించిన నా యేసయ్యా
+నా తోడై యున్న నా రాజా
+నిన్నే కీర్తింతును నా దేవా
+ఎల్లవేళలా నిన్ను స్తుతింతును`,
+      category: 'Worship',
+      day: 'all',
+      key: 'D Major',
+      sub: 'Opening Praise',
+      createdAt: '2026-10-14T00:00:00.000Z'
+    },
+    {
+      id: 'SONG_SEED_2',
+      title: 'పరిశుద్ధుడా మా ప్రాణనాథుడా (Parisuddhuda)',
+      lyrics: `పరిశుద్ధుడా మా ప్రాణనాథుడా
+పరలోక రాజా మా ఆరాధ్యుడా
+నీ సన్నిధిలోనే సంపూర్ణ సంతోషం
+నీ పాదముల చెంత నెమ్మది సమాధానం
+
+[కోరస్]
+హల్లెలూయా హల్లెలూయా
+హల్లెలూయా నా యేసయ్యా`,
+      category: 'Deep Worship',
+      day: 'all',
+      key: 'E Minor',
+      sub: 'Deep Worship',
+      createdAt: '2026-10-14T00:00:00.000Z'
+    }
   ]
 };
 
@@ -340,6 +378,11 @@ function loadDb() {
   // Ensure expenditures array exists
   if (!Array.isArray(loaded.expenditures)) {
     loaded.expenditures = DEFAULT_DB.expenditures;
+  }
+
+  // Ensure songs array exists
+  if (!Array.isArray(loaded.songs)) {
+    loaded.songs = DEFAULT_DB.songs;
   }
 
   return loaded;
@@ -970,6 +1013,74 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    // 14e. Songs API (GET)
+    if (pathname === '/api/songs' && req.method === 'GET') {
+      sendJson(200, { success: true, songs: db.songs || [] });
+      return;
+    }
+
+    // 14f. Add Song to Hymnal (POST)
+    if (pathname === '/api/songs' && req.method === 'POST') {
+      (async () => {
+        try {
+          await verifyAdminToken(req);
+          const body = await parseJsonBody();
+          const title = String(body.title || body.name || '').trim();
+          const lyrics = String(body.lyrics || '').trim();
+          const category = String(body.category || 'Worship').trim();
+          const day = String(body.day || 'all').trim();
+          const key = String(body.key || 'Scale').trim();
+
+          if (!title) return sendError(400, 'Song title/name is required');
+          if (!lyrics) return sendError(400, 'Song lyrics content is required');
+
+          if (!Array.isArray(db.songs)) db.songs = [];
+
+          const newSong = {
+            id: `SONG_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            title,
+            lyrics,
+            category,
+            day,
+            key,
+            sub: 'Added from Management Desk',
+            tempo: 'Live',
+            time: 'Session',
+            createdAt: new Date().toISOString()
+          };
+
+          db.songs.unshift(newSong);
+          saveDb(db);
+
+          broadcast('SONGS_UPDATED', db.songs);
+          console.log(`[SongAdded] Song "${title}" added to songs list`);
+          sendJson(201, { success: true, song: newSong, songs: db.songs });
+        } catch (err) {
+          sendError(err.status || 401, err.message || 'Unauthorized');
+        }
+      })();
+      return;
+    }
+
+    // 14g. Delete Song (DELETE)
+    if (pathname.startsWith('/api/songs/') && req.method === 'DELETE') {
+      (async () => {
+        try {
+          await verifyAdminToken(req);
+          const songId = pathname.replace('/api/songs/', '').trim();
+          if (!Array.isArray(db.songs)) db.songs = [];
+          db.songs = db.songs.filter(s => s.id !== songId);
+          saveDb(db);
+
+          broadcast('SONGS_UPDATED', db.songs);
+          sendJson(200, { success: true, songs: db.songs });
+        } catch (err) {
+          sendError(err.status || 401, err.message || 'Unauthorized');
+        }
+      })();
+      return;
+    }
+
     // 15. Manager Login (POST)
     if (pathname === '/api/admin/login' && req.method === 'POST') {
       (async () => {
@@ -1337,6 +1448,7 @@ wss.on('connection', (ws) => {
       chatMessages: db.chatMessages.slice(-50),
       offeringBalance: db.offeringBalance,
       expenditures: db.expenditures || [],
+      songs: db.songs || [],
       volunteerCount: db.volunteers.length
     },
     timestamp: Date.now()

@@ -22,7 +22,17 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         createNotificationChannels();
+        startNotificationService();
         handleNotificationIntent(getIntent());
+    }
+
+    private void startNotificationService() {
+        try {
+            Intent serviceIntent = new Intent(this, RRBMNotificationService.class);
+            androidx.core.content.ContextCompat.startForegroundService(this, serviceIntent);
+        } catch (Exception e) {
+            android.util.Log.e("MainActivity", "Failed to start notification service: " + e.getMessage());
+        }
     }
 
     @Override

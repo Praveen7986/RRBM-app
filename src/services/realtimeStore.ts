@@ -1,7 +1,8 @@
 // src/services/realtimeStore.ts
 // Production Realtime Store with Firebase Cloud Firestore (Internet-Wide) & Node.js/WebSocket LAN Fallback
 
-import { Volunteer, AlertEvent, ChatMessage, OfferingBalance, ConnectionStatus, Expenditure } from '../types/volunteer';
+import { Volunteer, AlertEvent, ChatMessage, OfferingBalance, ConnectionStatus, Expenditure, Song } from '../types/volunteer';
+import { SONGS_DATA } from '../data/songsData';
 import { triggerAlertSoundAndVibration, triggerChatNotification } from './audioNotification';
 import { apiClient, getServerBaseUrl, setCustomServerUrl } from './api';
 import { firebaseRealtime } from './firebaseRealtimeService';
@@ -13,10 +14,17 @@ const STORAGE_KEYS = {
   CHAT_MESSAGES: 'rrbm_live_chat_messages_2026',
   ACTIVE_ALERT: 'rrbm_active_alert_2026',
   OFFERING_BALANCE: 'rrbm_festival_balance_2026',
-  EXPENDITURES: 'rrbm_expenditures_2026'
+  EXPENDITURES: 'rrbm_expenditures_2026',
+  SONGS: 'rrbm_songs_hymnal_2026'
 };
 
 const BROADCAST_CHANNEL_NAME = 'rrbm_alert_realtime_channel_2026';
+
+const DEFAULT_SONGS_SEEDS: Song[] = [
+  ...SONGS_DATA.day1,
+  ...SONGS_DATA.day2,
+  ...SONGS_DATA.day3
+];
 
 const INITIAL_EXPENDITURES: Expenditure[] = [
   { id: 'EXP_1', date: '2026-10-20', purpose: 'Sound & Tent arrangement', amount: 25000, createdAt: '2026-10-20T10:00:00.000Z' },
@@ -57,6 +65,7 @@ class RealtimeStoreService {
     updatedAt: new Date().toISOString()
   };
   private expenditures: Expenditure[] = [];
+  private songs: Song[] = [];
   private connectionStatus: ConnectionStatus = 'connecting';
   private reconnectTimer: any = null;
   private heartbeatTimer: any = null;
@@ -204,6 +213,18 @@ class RealtimeStoreService {
       }
     } else {
       this.expenditures = INITIAL_EXPENDITURES;
+    }
+
+    // Load Songs
+    const savedSongs = localStorage.getItem(STORAGE_KEYS.SONGS);
+    if (savedSongs) {
+      try {
+        this.songs = JSON.parse(savedSongs);
+      } catch {
+        this.songs = DEFAULT_SONGS_SEEDS;
+      }
+    } else {
+      this.songs = DEFAULT_SONGS_SEEDS;
     }
   }
 
@@ -361,11 +382,12 @@ class RealtimeStoreService {
     if (this.isCloudFirebaseMode) return;
 
     try {
-      const [alertRes, chatRes, balanceRes, expRes] = await Promise.allSettled([
+      const [alertRes, chatRes, balanceRes, expRes, songsRes] = await Promise.allSettled([
         apiClient.getActiveAlert(),
         apiClient.getChatMessages(),
         apiClient.getOfferingBalance(),
-        apiClient.getExpenditures()
+        apiClient.getExpenditures(),
+        apiClient.getSongs()
       ]);
 
       if (alertRes.status === 'fulfilled' && alertRes.value.success) {
@@ -386,6 +408,11 @@ class RealtimeStoreService {
       if (expRes.status === 'fulfilled' && expRes.value.success && expRes.value.expenditures) {
         this.expenditures = expRes.value.expenditures;
         localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(this.expenditures));
+      }
+
+      if (songsRes.status === 'fulfilled' && songsRes.value.success && songsRes.value.songs) {
+        this.songs = songsRes.value.songs;
+        localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(this.songs));
       }
 
       this.notify();
@@ -413,6 +440,10 @@ class RealtimeStoreService {
       if (payload.expenditures && Array.isArray(payload.expenditures)) {
         this.expenditures = payload.expenditures;
         localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(this.expenditures));
+      }
+      if (payload.songs && Array.isArray(payload.songs)) {
+        this.songs = payload.songs;
+        localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(this.songs));
       }
       this.notify();
       return;
@@ -468,6 +499,10 @@ class RealtimeStoreService {
     } else if (type === 'EXPENDITURES_UPDATED') {
       this.expenditures = Array.isArray(payload) ? payload : [];
       localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(this.expenditures));
+      this.notify();
+    } else if (type === 'SONGS_UPDATED') {
+      this.songs = Array.isArray(payload) ? payload : [];
+      localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(this.songs));
       this.notify();
     } else if (type === 'VOLUNTEER_NAME_UPDATED') {
       if (payload && payload.id && this.currentVolunteer && this.currentVolunteer.id === payload.id) {
@@ -835,6 +870,33 @@ class RealtimeStoreService {
       return true;
     }
     throw new Error((res as any).message || 'Failed to update volunteer name');
+  }
+
+  // Songs Hymnal Methods
+  public getSongs(): Song[] {
+    return [...this.songs];
+  }
+
+  public async addSong(title: string, lyrics: string, adminPin: string): Promise<Song[]> {
+    const res = await apiClient.addSong({ title, lyrics, category: 'Worship', day: 'all', key: 'Scale' }, adminPin);
+    if (res.success && res.songs) {
+      this.songs = res.songs;
+      localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(this.songs));
+      this.notify();
+      return this.songs;
+    }
+    throw new Error((res as any).message || 'Failed to add song');
+  }
+
+  public async deleteSong(id: string, adminPin: string): Promise<Song[]> {
+    const res = await apiClient.deleteSong(id, adminPin);
+    if (res.success && res.songs) {
+      this.songs = res.songs;
+      localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(this.songs));
+      this.notify();
+      return this.songs;
+    }
+    throw new Error((res as any).message || 'Failed to delete song');
   }
 
   public getConnectionStatus(): ConnectionStatus {

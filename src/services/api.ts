@@ -1,7 +1,7 @@
 // src/services/api.ts
 // Production HTTP API Client with Multi-Device Cloud/LAN Server Resolution & Offline Handling
 
-import { Volunteer, AlertEvent, ChatMessage, OfferingBalance, Expenditure } from '../types/volunteer';
+import { Volunteer, AlertEvent, ChatMessage, OfferingBalance, Expenditure, Song } from '../types/volunteer';
 
 const STORAGE_KEY_SERVER_URL = 'rrbm_custom_server_url';
 const DEFAULT_FALLBACK_SERVER = 'https://rrbm-app-backend.onrender.com';
@@ -346,6 +346,46 @@ export const apiClient = {
     return fetchJson<{ success: boolean }>('/api/push/subscribe', {
       method: 'POST',
       body: JSON.stringify({ subscription })
+    });
+  },
+
+  // 13. Songs API
+  async getSongs(): Promise<{ success: boolean; songs: Song[] }> {
+    return fetchJson<{ success: boolean; songs: Song[] }>('/api/songs');
+  },
+
+  async addSong(
+    song: { title: string; lyrics: string; category?: string; day?: string; key?: string },
+    authTokenOrPin: string
+  ): Promise<{ success: boolean; song: Song; songs: Song[] }> {
+    const headers: Record<string, string> = {};
+    if (authTokenOrPin && authTokenOrPin.length > 30) {
+      headers['Authorization'] = `Bearer ${authTokenOrPin}`;
+    } else {
+      headers['x-admin-pin'] = authTokenOrPin;
+    }
+
+    return fetchJson<{ success: boolean; song: Song; songs: Song[] }>('/api/songs', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(song)
+    });
+  },
+
+  async deleteSong(
+    songId: string,
+    authTokenOrPin: string
+  ): Promise<{ success: boolean; songs: Song[] }> {
+    const headers: Record<string, string> = {};
+    if (authTokenOrPin && authTokenOrPin.length > 30) {
+      headers['Authorization'] = `Bearer ${authTokenOrPin}`;
+    } else {
+      headers['x-admin-pin'] = authTokenOrPin;
+    }
+
+    return fetchJson<{ success: boolean; songs: Song[] }>(`/api/songs/${encodeURIComponent(songId)}`, {
+      method: 'DELETE',
+      headers
     });
   }
 };

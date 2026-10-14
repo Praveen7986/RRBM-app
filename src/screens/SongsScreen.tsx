@@ -1,9 +1,9 @@
 // src/screens/SongsScreen.tsx
 // Screen 3: Worship Song Lyrics Book & Festival Hymnal
 // Designed for reading and singing along during RRBM 3-Day Fasting Prayers 2026
-// Features: Day Filtering, Category Filter, Search, Font Size Zoom, Language Toggle (English/Telugu) & Full Lyrics View
+// Visualized in Telugu NATS font, preserving exact lyrics formatting as pasted
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BookOpen, 
   Search, 
@@ -16,39 +16,41 @@ import {
   ArrowLeft,
   Music2,
   Sparkles,
-  SlidersHorizontal,
   Bookmark
 } from 'lucide-react';
-import { SONGS_DATA, SongItem } from '../data/songsData';
+import { realtimeStore } from '../services/realtimeStore';
+import { Song } from '../types/volunteer';
 
 export const SongsScreen: React.FC = () => {
+  const [songsList, setSongsList] = useState<Song[]>(() => realtimeStore.getSongs());
   const [activeDay, setActiveDay] = useState<'all' | 'day1' | 'day2' | 'day3'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [selectedSong, setSelectedSong] = useState<SongItem | null>(null);
+  const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   
   // Lyrics Reader State
-  const [lyricsLanguage, setLyricsLanguage] = useState<'english' | 'telugu'>('english');
-  const [fontSize, setFontSize] = useState<number>(15);
+  const [fontSize, setFontSize] = useState<number>(18);
   const [copied, setCopied] = useState<boolean>(false);
 
-  // Collect all songs across all days
-  const allSongsList: SongItem[] = [
-    ...SONGS_DATA.day1,
-    ...SONGS_DATA.day2,
-    ...SONGS_DATA.day3
-  ];
+  useEffect(() => {
+    const unsub = realtimeStore.subscribe(() => {
+      setSongsList(realtimeStore.getSongs());
+    });
+    return unsub;
+  }, []);
 
   // Unique categories
-  const categories = ['All', 'Opening Praise', 'Deep Worship', 'Holy Spirit', 'Consecration', 'Thanksgiving'];
+  const categories = ['All', 'Opening Praise', 'Deep Worship', 'Holy Spirit', 'Worship', 'Consecration', 'Thanksgiving'];
 
   // Current day filtered songs
-  const daySongs = activeDay === 'all' ? allSongsList : (SONGS_DATA[activeDay] || []);
+  const daySongs = activeDay === 'all' 
+    ? songsList 
+    : songsList.filter(s => (s.day || 'all') === activeDay || (s.day || 'all') === 'all');
 
   // Search and category filtered songs
   const filteredSongs = daySongs.filter((song) => {
     // Category filter
-    if (selectedCategory !== 'All' && !song.category.toLowerCase().includes(selectedCategory.toLowerCase())) {
+    if (selectedCategory !== 'All' && !song.category?.toLowerCase().includes(selectedCategory.toLowerCase())) {
       return false;
     }
 
@@ -57,38 +59,31 @@ export const SongsScreen: React.FC = () => {
     const q = searchQuery.toLowerCase();
     return (
       song.title.toLowerCase().includes(q) ||
-      song.sub.toLowerCase().includes(q) ||
-      song.key.toLowerCase().includes(q) ||
-      song.category.toLowerCase().includes(q) ||
-      (song.lyrics && song.lyrics.toLowerCase().includes(q)) ||
-      (song.teluguLyrics && song.teluguLyrics.toLowerCase().includes(q))
+      (song.sub && song.sub.toLowerCase().includes(q)) ||
+      (song.key && song.key.toLowerCase().includes(q)) ||
+      (song.category && song.category.toLowerCase().includes(q)) ||
+      (song.lyrics && song.lyrics.toLowerCase().includes(q))
     );
   });
 
-  const handleCopyLyrics = (song: SongItem) => {
-    const textToCopy = (lyricsLanguage === 'telugu' && song.teluguLyrics) ? song.teluguLyrics : song.lyrics;
-    navigator.clipboard.writeText(`${song.title}\nScale: ${song.key}\n\n${textToCopy}`);
+  const handleCopyLyrics = (song: Song) => {
+    navigator.clipboard.writeText(`${song.title}\n\n${song.lyrics}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const increaseFontSize = () => {
-    setFontSize(prev => Math.min(prev + 2, 24));
+    setFontSize(prev => Math.min(prev + 2, 28));
   };
 
   const decreaseFontSize = () => {
-    setFontSize(prev => Math.max(prev - 2, 12));
+    setFontSize(prev => Math.max(prev - 2, 13));
   };
 
   // -------------------------------------------------------------
   // Full-Screen Lyrics Reader Overlay
   // -------------------------------------------------------------
   if (selectedSong) {
-    const hasTelugu = Boolean(selectedSong.teluguLyrics && selectedSong.teluguLyrics.trim());
-    const currentLyrics = (lyricsLanguage === 'telugu' && hasTelugu) 
-      ? selectedSong.teluguLyrics! 
-      : selectedSong.lyrics;
-
     return (
       <div className="fixed inset-0 z-50 bg-[#070D1D] flex flex-col overflow-hidden select-text text-white">
         {/* Top Sticky Header */}
@@ -116,7 +111,7 @@ export const SongsScreen: React.FC = () => {
               <button
                 type="button"
                 onClick={decreaseFontSize}
-                disabled={fontSize <= 12}
+                disabled={fontSize <= 13}
                 className="p-1.5 text-slate-300 hover:text-white disabled:opacity-30 cursor-pointer"
                 title="Decrease font size"
               >
@@ -128,7 +123,7 @@ export const SongsScreen: React.FC = () => {
               <button
                 type="button"
                 onClick={increaseFontSize}
-                disabled={fontSize >= 24}
+                disabled={fontSize >= 28}
                 className="p-1.5 text-slate-300 hover:text-white disabled:opacity-30 cursor-pointer"
                 title="Increase font size"
               >
@@ -153,7 +148,7 @@ export const SongsScreen: React.FC = () => {
         <div className="flex-1 overflow-y-auto px-4 py-5 max-w-3xl mx-auto w-full space-y-4">
           {/* Song Header Info Card */}
           <div 
-            className="p-5 rounded-2xl flex flex-col space-y-3"
+            className="p-5 rounded-2xl flex flex-col space-y-2.5"
             style={{
               background: '#101726',
               border: '1px solid rgba(56, 189, 248, 0.25)',
@@ -163,67 +158,39 @@ export const SongsScreen: React.FC = () => {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400 block mb-1">
-                  {selectedSong.category} &bull; {selectedSong.day.toUpperCase()}
+                  {selectedSong.category || 'Worship'}
                 </span>
-                <h1 className="text-xl sm:text-2xl font-black text-white leading-tight">
+                <h1 
+                  className="text-2xl sm:text-3xl font-black text-white leading-tight font-nats"
+                  style={{ fontFamily: "'NATS', 'Noto Sans Telugu', sans-serif" }}
+                >
                   {selectedSong.title}
                 </h1>
-                <p className="text-xs text-slate-400 mt-1">
-                  {selectedSong.sub}
-                </p>
+                {selectedSong.sub && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    {selectedSong.sub}
+                  </p>
+                )}
               </div>
 
-              <div className="flex flex-col items-end shrink-0 gap-1.5">
-                <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                  {selectedSong.key}
-                </span>
-                <span className="text-[10px] text-slate-400 font-mono">
-                  {selectedSong.tempo}
-                </span>
-              </div>
+              {selectedSong.key && (
+                <div className="flex flex-col items-end shrink-0 gap-1.5">
+                  <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                    {selectedSong.key}
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* Theme Verse */}
             {selectedSong.themeVerse && (
               <div className="p-2.5 rounded-xl bg-sky-950/40 border border-sky-500/20 text-xs text-sky-200/90 italic flex items-center gap-2">
                 <Bookmark size={14} className="text-sky-400 shrink-0" />
                 <span>{selectedSong.themeVerse}</span>
               </div>
             )}
-
-            {/* Language Selector if Telugu Available */}
-            {hasTelugu && (
-              <div className="flex items-center gap-2 pt-1 border-t border-slate-800">
-                <span className="text-[11px] font-bold text-slate-400">Language:</span>
-                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-900 border border-slate-700/60">
-                  <button
-                    type="button"
-                    onClick={() => setLyricsLanguage('english')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      lyricsLanguage === 'english'
-                        ? 'bg-sky-500 text-slate-950 shadow-sm'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    English
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLyricsLanguage('telugu')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      lyricsLanguage === 'telugu'
-                        ? 'bg-sky-500 text-slate-950 shadow-sm'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    తెలుగు (Telugu)
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Formatted Lyrics Verses Card */}
+          {/* Formatted Lyrics Verses Card with Telugu NATS Font */}
           <div 
             className="p-6 rounded-2xl space-y-4"
             style={{
@@ -232,10 +199,14 @@ export const SongsScreen: React.FC = () => {
             }}
           >
             <div 
-              className="leading-relaxed font-normal whitespace-pre-wrap select-text text-slate-200"
-              style={{ fontSize: `${fontSize}px`, lineHeight: 1.7 }}
+              className="leading-relaxed whitespace-pre-wrap select-text text-slate-100 font-nats"
+              style={{ 
+                fontSize: `${fontSize}px`, 
+                lineHeight: 1.8,
+                fontFamily: "'NATS', 'Noto Sans Telugu', sans-serif"
+              }}
             >
-              {currentLyrics}
+              {selectedSong.lyrics}
             </div>
           </div>
         </div>
@@ -260,7 +231,7 @@ export const SongsScreen: React.FC = () => {
             Worship Songs & Lyrics
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-xl">
-            Complete lyrics and musical scales for all festival worship sessions
+            Complete worship songs and lyrics in Telugu NATS font
           </p>
         </div>
 
@@ -278,9 +249,13 @@ export const SongsScreen: React.FC = () => {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search by song title, lyric words, or scale key (e.g. G Major)..."
-          className="w-full py-2.5 pl-10 pr-9 rounded-2xl text-xs text-white placeholder-slate-500 outline-none transition-all shadow-md"
-          style={{ background: '#101726', border: '1px solid rgba(56, 189, 248, 0.25)' }}
+          placeholder="Search by song name or lyrics words..."
+          className="w-full py-2.5 pl-10 pr-9 rounded-2xl text-xs text-white placeholder-slate-500 outline-none transition-all shadow-md font-nats"
+          style={{ 
+            background: '#101726', 
+            border: '1px solid rgba(56, 189, 248, 0.25)',
+            fontFamily: "'NATS', 'Noto Sans Telugu', sans-serif"
+          }}
         />
         {searchQuery && (
           <button
@@ -304,7 +279,7 @@ export const SongsScreen: React.FC = () => {
               : 'bg-[#101726] text-slate-300 hover:text-white border border-white/10'
           }`}
         >
-          All Songs ({allSongsList.length})
+          All Songs ({songsList.length})
         </button>
 
         <button
@@ -372,17 +347,14 @@ export const SongsScreen: React.FC = () => {
             <BookOpen size={28} className="text-slate-500 mx-auto" />
             <h3 className="text-sm font-bold text-white">No songs found</h3>
             <p className="text-xs text-slate-400 max-w-xs mx-auto">
-              Try adjusting your search query or switching to All Songs.
+              Songs added from the Management Desk will appear here in real time.
             </p>
           </div>
         ) : (
           filteredSongs.map((song, index) => (
             <div
               key={song.id}
-              onClick={() => {
-                setSelectedSong(song);
-                setLyricsLanguage('english');
-              }}
+              onClick={() => setSelectedSong(song)}
               className="p-4 rounded-2xl flex items-center justify-between cursor-pointer transition-all hover:scale-[1.006] active:scale-[0.99] group shadow-md"
               style={{
                 background: '#101726',
@@ -404,27 +376,29 @@ export const SongsScreen: React.FC = () => {
 
                 <div className="flex flex-col overflow-hidden">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-white group-hover:text-sky-400 transition-colors truncate">
+                    <span 
+                      className="text-base font-bold text-white group-hover:text-sky-400 transition-colors truncate font-nats"
+                      style={{ fontFamily: "'NATS', 'Noto Sans Telugu', sans-serif" }}
+                    >
                       {song.title}
                     </span>
                   </div>
 
-                  <span className="text-xs text-slate-400 truncate mt-0.5">
-                    {song.sub}
-                  </span>
+                  {song.sub && (
+                    <span className="text-xs text-slate-400 truncate mt-0.5">
+                      {song.sub}
+                    </span>
+                  )}
 
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="px-2 py-0.5 rounded-full text-[9.5px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25">
-                      {song.key}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[9.5px] font-semibold bg-slate-800 text-slate-300 border border-slate-700/60">
-                      {song.category}
-                    </span>
-                    {song.teluguLyrics && (
-                      <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-sky-500/15 text-sky-300">
-                        తెలుగు
+                    {song.key && (
+                      <span className="px-2 py-0.5 rounded-full text-[9.5px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                        {song.key}
                       </span>
                     )}
+                    <span className="px-2 py-0.5 rounded-full text-[9.5px] font-semibold bg-slate-800 text-slate-300 border border-slate-700/60">
+                      {song.category || 'Worship'}
+                    </span>
                   </div>
                 </div>
               </div>

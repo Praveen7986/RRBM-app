@@ -57,4 +57,19 @@ export interface Expenditure {
   createdAt?: string;
 }
 
+export interface Song {
+  id: string;
+  title: string;
+  lyrics: string;
+  category?: string;
+  day?: string;
+  key?: string;
+  sub?: string;
+  tempo?: string;
+  time?: string;
+  teluguLyrics?: string;
+  themeVerse?: string;
+  createdAt?: string;
+}
+
 export type ConnectionStatus = 'connected' | 'connecting' | 'offline';

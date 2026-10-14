@@ -1,6 +1,6 @@
 // src/components/ManagerModal.tsx
 // Authenticated Manager / Admin Portal for Festival Coordinators & Ministry Pastors
-// Includes Offering Balance, Spent Money (Expenditures), and Volunteer Roster with Name Editing
+// Includes Offering Balance, Spent Money (Expenditures), Songs Management, and Volunteer Roster
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -21,12 +21,13 @@ import {
   Calendar,
   Edit3,
   Trash2,
-  Check
+  Check,
+  Music2
 } from 'lucide-react';
 import { apiClient } from '../services/api';
 import { realtimeStore } from '../services/realtimeStore';
 import { firebaseRealtime } from '../services/firebaseRealtimeService';
-import { Volunteer, Expenditure } from '../types/volunteer';
+import { Volunteer, Expenditure, Song } from '../types/volunteer';
 import { signInWithCustomToken, signOut } from 'firebase/auth';
 import { getFirebaseServices } from '../config/firebase';
 
@@ -42,8 +43,8 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
   const [authError, setAuthError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Active Tab: Offering | Spent | Roster
-  const [activeTab, setActiveTab] = useState<'balance' | 'spent' | 'volunteers'>('balance');
+  // Active Tab: Offering | Spent | Songs | Roster
+  const [activeTab, setActiveTab] = useState<'balance' | 'spent' | 'songs' | 'volunteers'>('balance');
 
   // Offering Balance State
   const [newBalanceInput, setNewBalanceInput] = useState('');
@@ -57,6 +58,14 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
   const [spentSuccess, setSpentSuccess] = useState<string | null>(null);
   const [spentError, setSpentError] = useState<string | null>(null);
   const [expendituresList, setExpendituresList] = useState<Expenditure[]>(() => realtimeStore.getExpenditures());
+
+  // Songs Hymnal State
+  const [songName, setSongName] = useState('');
+  const [songLyrics, setSongLyrics] = useState('');
+  const [isSavingSong, setIsSavingSong] = useState(false);
+  const [songSuccess, setSongSuccess] = useState<string | null>(null);
+  const [songError, setSongError] = useState<string | null>(null);
+  const [songsList, setSongsList] = useState<Song[]>(() => realtimeStore.getSongs());
 
   // Volunteer Roster State
   const [volunteersList, setVolunteersList] = useState<Volunteer[]>([]);
@@ -85,6 +94,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
   useEffect(() => {
     const unsub = realtimeStore.subscribe(() => {
       setExpendituresList(realtimeStore.getExpenditures());
+      setSongsList(realtimeStore.getSongs());
     });
     return unsub;
   }, []);
@@ -99,9 +109,10 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
         }
       }
 
-      const [volRes, expRes] = await Promise.allSettled([
+      const [volRes, expRes, songsRes] = await Promise.allSettled([
         apiClient.getVolunteers(),
-        apiClient.getExpenditures()
+        apiClient.getExpenditures(),
+        apiClient.getSongs()
       ]);
 
       if (volRes.status === 'fulfilled' && volRes.value.success && !realtimeStore.isUsingCloud()) {
@@ -109,6 +120,9 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
       }
       if (expRes.status === 'fulfilled' && expRes.value.success && expRes.value.expenditures) {
         setExpendituresList(expRes.value.expenditures);
+      }
+      if (songsRes.status === 'fulfilled' && songsRes.value.success && songsRes.value.songs) {
+        setSongsList(songsRes.value.songs);
       }
     } catch {
       // ignore
@@ -245,7 +259,63 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
     }
   };
 
-  // 3. Edit Volunteer Name
+  // 3. Songs Hymnal (Add Song)
+  const handleSaveSong = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = songName.trim();
+    const lyrics = songLyrics.trim();
+
+    if (!name) {
+      setSongError('Please enter a Song Name.');
+      return;
+    }
+    if (!lyrics) {
+      setSongError('Please enter or paste the song lyrics.');
+      return;
+    }
+
+    setIsSavingSong(true);
+    setSongError(null);
+    setSongSuccess(null);
+
+    try {
+      const { auth } = getFirebaseServices();
+      let token = adminToken;
+      if (auth?.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      }
+
+      const updated = await realtimeStore.addSong(name, lyrics, token);
+      setSongsList(updated);
+      setSongName('');
+      setSongLyrics('');
+      setSongSuccess(`Song "${name}" added to Songs tab successfully!`);
+      setTimeout(() => setSongSuccess(null), 4000);
+    } catch (err: any) {
+      setSongError(err.message || 'Failed to add song');
+    } finally {
+      setIsSavingSong(false);
+    }
+  };
+
+  const handleDeleteSong = async (id: string, title: string) => {
+    if (!confirm(`Are you sure you want to delete song "${title}"?`)) return;
+
+    try {
+      const { auth } = getFirebaseServices();
+      let token = adminToken;
+      if (auth?.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      }
+
+      const updated = await realtimeStore.deleteSong(id, token);
+      setSongsList(updated);
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete song');
+    }
+  };
+
+  // 4. Edit Volunteer Name
   const handleStartEditName = (vol: Volunteer) => {
     setEditingVolId(vol.id);
     setEditingVolName(vol.name);
@@ -279,7 +349,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
     }
   };
 
-  // 4. Provision Volunteer Account
+  // 5. Provision Volunteer Account
   const handleCreateVolunteer = async (e: React.FormEvent) => {
     e.preventDefault();
     const id = newVolId.trim();
@@ -394,7 +464,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                   Manager Verification
                 </h4>
                 <p className="text-xs text-slate-400 max-w-xs mt-1">
-                  Enter authorized Secret Key to manage offering balance, record expenditures, and manage volunteer roster.
+                  Enter authorized Secret Key to manage offering balance, expenditures, hymnal songs, and volunteer roster.
                 </p>
               </div>
 
@@ -433,44 +503,57 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
           ) : (
             /* Manager Dashboard Tabs */
             <div className="space-y-3">
-              {/* 3 Streamlined Tabs: Offering | Spent | Roster */}
-              <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-[#101c36] border border-sky-500/20 text-xs font-black">
+              {/* 4 Tabs: Offering | Spent | Songs | Roster */}
+              <div className="grid grid-cols-4 gap-1 p-1 rounded-2xl bg-[#101c36] border border-sky-500/20 text-xs font-black">
                 <button
                   type="button"
                   onClick={() => setActiveTab('balance')}
-                  className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`py-2 px-1 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
                     activeTab === 'balance'
                       ? 'bg-sky-500 text-slate-950 shadow-md font-bold'
                       : 'text-slate-300 hover:text-white'
                   }`}
                 >
-                  <IndianRupee size={14} />
+                  <IndianRupee size={13} />
                   <span>Offering</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setActiveTab('spent')}
-                  className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`py-2 px-1 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
                     activeTab === 'spent'
                       ? 'bg-sky-500 text-slate-950 shadow-md font-bold'
                       : 'text-slate-300 hover:text-white'
                   }`}
                 >
-                  <Receipt size={14} />
+                  <Receipt size={13} />
                   <span>Spent</span>
                 </button>
 
                 <button
                   type="button"
+                  onClick={() => setActiveTab('songs')}
+                  className={`py-2 px-1 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                    activeTab === 'songs'
+                      ? 'bg-sky-500 text-slate-950 shadow-md font-bold'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <Music2 size={13} />
+                  <span>Songs</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setActiveTab('volunteers')}
-                  className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`py-2 px-1 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
                     activeTab === 'volunteers'
                       ? 'bg-sky-500 text-slate-950 shadow-md font-bold'
                       : 'text-slate-300 hover:text-white'
                   }`}
                 >
-                  <Users size={14} />
+                  <Users size={13} />
                   <span>Roster</span>
                 </button>
               </div>
@@ -554,7 +637,6 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                       </div>
                     )}
 
-                    {/* Inputs: Date, Purpose, Money Spent */}
                     <div className="space-y-2.5">
                       <div>
                         <label className="text-[10px] font-bold text-slate-300 block mb-1">
@@ -663,7 +745,127 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                 </div>
               )}
 
-              {/* TAB 3: ROSTER (Show registered volunteers with Edit button beside them to edit name) */}
+              {/* TAB 3: SONGS TAB (Inputs: Song name, Lyrics) */}
+              {activeTab === 'songs' && (
+                <div className="space-y-3.5">
+                  <form onSubmit={handleSaveSong} className="p-4 rounded-2xl bg-[#101c36] border border-sky-500/20 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-sky-500/20 flex items-center justify-center text-sky-400">
+                        <Music2 size={14} />
+                      </div>
+                      <span className="text-xs font-black text-sky-300 uppercase tracking-wide">
+                        Add Song to Hymnal
+                      </span>
+                    </div>
+
+                    <p className="text-[10px] text-slate-400">
+                      Add a song to the volunteer Songs tab. Lyrics will be visualized in Telugu NATS font exactly as pasted.
+                    </p>
+
+                    {songSuccess && (
+                      <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
+                        <CheckCircle2 size={14} className="shrink-0 text-emerald-400" />
+                        <span>{songSuccess}</span>
+                      </div>
+                    )}
+
+                    {songError && (
+                      <div className="p-2.5 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-200 text-xs flex items-center gap-2">
+                        <AlertTriangle size={14} className="shrink-0 text-rose-400" />
+                        <span>{songError}</span>
+                      </div>
+                    )}
+
+                    <div className="space-y-2.5">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                          Song Name
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. యెహోవా నా బలమా / Hosanna Praise"
+                          value={songName}
+                          onChange={(e) => setSongName(e.target.value)}
+                          className="w-full py-2 px-3 rounded-xl bg-[#0c152a] border border-sky-500/30 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400 font-semibold"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                          Lyrics
+                        </label>
+                        <textarea
+                          rows={6}
+                          placeholder="Paste song lyrics here as-is...&#10;యెహోవా నా బలమా - యథార్థమైనది నీ మార్గం&#10;పరిపూర్ణమైనది నీ చిత్తం..."
+                          value={songLyrics}
+                          onChange={(e) => setSongLyrics(e.target.value)}
+                          className="w-full py-2 px-3 rounded-xl bg-[#0c152a] border border-sky-500/30 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400 font-nats resize-y leading-relaxed"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSavingSong}
+                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 text-slate-950 font-bold text-xs uppercase tracking-wider transition-all active:scale-98 cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+                    >
+                      {isSavingSong ? (
+                        <>
+                          <RefreshCw size={13} className="animate-spin" />
+                          <span>Adding Song...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Music2 size={13} />
+                          <span>Submit to Songs Tab</span>
+                        </>
+                      )}
+                    </button>
+                  </form>
+
+                  {/* Existing Songs List */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between pb-0.5">
+                      <span className="text-xs font-black text-white uppercase">
+                        Songs in Hymnal ({songsList.length})
+                      </span>
+                    </div>
+
+                    <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
+                      {songsList.length === 0 ? (
+                        <p className="text-[11px] text-slate-500 italic p-2 text-center">No songs added yet.</p>
+                      ) : (
+                        songsList.map((item) => (
+                          <div 
+                            key={item.id} 
+                            className="p-2.5 rounded-xl bg-[#101c36] border border-sky-500/20 flex items-center justify-between text-xs"
+                          >
+                            <div className="flex flex-col text-left min-w-0 pr-2">
+                              <span className="font-bold text-white text-xs truncate font-nats">{item.title}</span>
+                              <span className="text-[9.5px] text-sky-300/80 font-mono">
+                                {item.category || 'Worship'}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSong(item.id, item.title)}
+                              className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 cursor-pointer transition-colors shrink-0"
+                              title="Delete this song"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 4: ROSTER (Show registered volunteers with Edit button beside them to edit name) */}
               {activeTab === 'volunteers' && (
                 <div className="space-y-3">
                   {/* Account Provisioning Form */}
