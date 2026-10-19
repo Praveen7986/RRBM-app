@@ -377,8 +377,8 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 select-none" style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)' }}>
-      <div className="manager-modal-box max-w-lg w-full bg-[#0a101f] border border-sky-500/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-3 select-none" style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)' }}>
+      <div className="manager-modal-box max-w-lg w-full bg-[#0a101f] border border-sky-500/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh] sm:max-h-[90vh]">
         {/* Header */}
         <div className="p-4 bg-[#101c36] border-b border-sky-500/20 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -417,7 +417,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
         </div>
 
         {/* Modal Body */}
-        <div className="p-4 flex-1 overflow-y-auto space-y-4">
+        <div className="p-4 pb-20 flex-1 overflow-y-auto space-y-4">
           {!isAuthenticated ? (
             /* Manager PIN Login */
             <div className="py-6 flex flex-col items-center text-center space-y-4">
@@ -958,7 +958,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                       </div>
                     )}
 
-                    <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
+                    <div className="space-y-1.5">
                       {volunteersList.length === 0 ? (
                         <p className="text-[11px] text-slate-500 italic p-2 text-center">No volunteers registered yet.</p>
                       ) : (
@@ -1004,11 +1004,11 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                                   </button>
                                 </div>
                               ) : (
-                                <div className="text-left min-w-0">
+                                <div className="flex flex-col text-left min-w-0 flex-1">
                                   <span className="font-bold text-white text-xs block leading-tight truncate">
                                     {vol.name}
                                   </span>
-                                  <span className="text-[9.5px] text-slate-400 font-mono">
+                                  <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">
                                     Volunteer ID: {vol.id}
                                   </span>
                                 </div>
@@ -1033,18 +1033,18 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                   </div>
 
                   {/* Live Chat Moderation - Clear Chat */}
-                  <div className="pt-2 border-t border-sky-500/20">
-                    <div className="p-3.5 rounded-2xl bg-[#101c36] border border-rose-500/30 space-y-2.5">
+                  <div className="pt-3 pb-4 border-t border-sky-500/20">
+                    <div className="p-3.5 rounded-2xl bg-[#101c36] border border-rose-500/30 space-y-2.5 shadow-lg">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-rose-500/20 flex items-center justify-center text-rose-400">
-                            <MessageSquare size={14} />
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                            <MessageSquare size={16} />
                           </div>
-                          <div>
-                            <span className="text-xs font-black text-rose-300 uppercase tracking-wide block leading-tight">
+                          <div className="flex flex-col text-left">
+                            <span className="text-xs font-black text-rose-300 uppercase tracking-wide block">
                               Live Chat Moderation
                             </span>
-                            <span className="text-[10px] text-slate-400 block">
+                            <span className="text-[10.5px] text-slate-400 block mt-0.5">
                               Clear all volunteer chat messages from the Alert page
                             </span>
                           </div>

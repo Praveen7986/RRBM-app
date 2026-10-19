@@ -29,8 +29,8 @@ export const SongLyricsModal: React.FC<SongLyricsModalProps> = ({ song, onClose 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 select-none">
-      <div className="w-full max-w-md bg-[#0c152a] border border-sky-500/30 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/85 backdrop-blur-md p-3 select-none">
+      <div className="w-full max-w-md bg-[#0c152a] border border-sky-500/30 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] sm:max-h-[90vh]">
         {/* Header */}
         <div className="p-4 bg-[#101c36] border-b border-sky-500/20 flex items-start justify-between">
           <div className="flex items-start gap-2.5 text-left pr-2">
@@ -129,7 +129,7 @@ export const SongLyricsModal: React.FC<SongLyricsModalProps> = ({ song, onClose 
         )}
 
         {/* Scrollable Lyrics View */}
-        <div className="p-4 flex-1 overflow-y-auto text-left space-y-4">
+        <div className="p-4 pb-16 flex-1 overflow-y-auto text-left space-y-4">
           {/* Scripture Quote */}
           {song.themeVerse && (
             <div className="p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-[11px] font-medium text-amber-200/90 italic flex items-start gap-1.5">

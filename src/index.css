@@ -188,7 +188,7 @@ img {
     flex: 1 1 auto;
     width: 100%;
     min-height: 100dvh;
-    padding: calc(var(--safe-top) + 14px) 16px calc(var(--nav-height) + var(--safe-bottom) + 24px) 16px;
+    padding: calc(var(--safe-top) + 14px) 16px calc(var(--nav-height) + var(--safe-bottom) + 56px) 16px;
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
@@ -238,7 +238,7 @@ img {
     width: 100%;
     max-width: 900px;
     margin: 0 auto;
-    padding: calc(var(--safe-top) + 24px) 24px calc(var(--nav-height) + var(--safe-bottom) + 32px) 24px;
+    padding: calc(var(--safe-top) + 24px) 24px calc(var(--nav-height) + var(--safe-bottom) + 56px) 24px;
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;

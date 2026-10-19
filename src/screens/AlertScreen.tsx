@@ -174,7 +174,7 @@ export const AlertScreen: React.FC = () => {
   // If user is not signed in as a volunteer, render the login card inside Alerts
   if (!currentVolunteer) {
     return (
-      <div className="alert-screen flex flex-col w-full space-y-4 pb-4 select-none max-w-lg mx-auto">
+      <div className="alert-screen flex flex-col w-full space-y-4 pb-24 select-none max-w-lg mx-auto">
         {/* Header */}
         <div className="w-full flex items-center justify-between pt-1">
           <div className="flex flex-col">
@@ -297,7 +297,7 @@ export const AlertScreen: React.FC = () => {
 
   // Volunteer is signed in: Render Screen 2
   return (
-    <div className="alert-screen flex flex-col w-full space-y-4 pb-4 select-none max-w-4xl mx-auto">
+    <div className="alert-screen flex flex-col w-full space-y-4 pb-24 select-none max-w-4xl mx-auto">
       {/* 1. Top Header with Date, Title & Volunteer Avatar Pill */}
       <div className="w-full flex items-center justify-between pt-1">
         <div className="flex flex-col">

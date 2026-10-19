@@ -46,7 +46,7 @@ export const MoneyJarScreen: React.FC = () => {
   };
 
   return (
-    <div className="money-jar-screen flex flex-col w-full space-y-4 pb-6 select-none max-w-3xl mx-auto">
+    <div className="money-jar-screen flex flex-col w-full space-y-4 pb-24 select-none max-w-3xl mx-auto">
       {/* 1. Header with Title & Manager View Pill */}
       <div className="w-full flex items-start justify-between pt-1">
         <div className="flex flex-col">

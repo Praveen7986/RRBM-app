@@ -82,7 +82,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
   }
 
   return (
-    <div className="home-screen flex flex-col w-full space-y-5 pb-6 select-none max-w-4xl mx-auto">
+    <div className="home-screen flex flex-col w-full space-y-5 pb-24 select-none max-w-4xl mx-auto">
       {/* 1. Top Greeting Header */}
       <div className="w-full flex items-start justify-between pt-1">
         <div className="flex flex-col">

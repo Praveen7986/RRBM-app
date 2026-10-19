@@ -43,7 +43,7 @@ export const UpdateModal: React.FC = () => {
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 select-none"
+      className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 select-none"
       onClick={(e) => {
         // Only allow clicking backdrop to dismiss if optional and in non-downloading state
         if (!isMandatory && state !== 'DOWNLOADING' && state !== 'VERIFYING' && e.target === e.currentTarget) {

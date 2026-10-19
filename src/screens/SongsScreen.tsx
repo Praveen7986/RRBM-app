@@ -85,7 +85,7 @@ export const SongsScreen: React.FC = () => {
   // -------------------------------------------------------------
   if (selectedSong) {
     return (
-      <div className="fixed inset-0 z-50 bg-[#070D1D] flex flex-col overflow-hidden select-text text-white">
+      <div className="fixed inset-0 z-[2000] bg-[#070D1D] flex flex-col overflow-hidden select-text text-white">
         {/* Top Sticky Header */}
         <div 
           className="w-full px-4 py-3 border-b flex items-center justify-between shrink-0"
@@ -145,7 +145,7 @@ export const SongsScreen: React.FC = () => {
         </div>
 
         {/* Scrollable Lyrics Body */}
-        <div className="flex-1 overflow-y-auto px-4 py-5 max-w-3xl mx-auto w-full space-y-4">
+        <div className="flex-1 overflow-y-auto px-4 pt-5 pb-32 max-w-3xl mx-auto w-full space-y-4">
           {/* Song Header Info Card */}
           <div 
             className="p-5 rounded-2xl flex flex-col space-y-2.5"
@@ -220,7 +220,7 @@ export const SongsScreen: React.FC = () => {
   // Main Songs Hymnal Screen
   // -------------------------------------------------------------
   return (
-    <div className="songs-screen flex flex-col w-full space-y-4 pb-6 select-none max-w-4xl mx-auto">
+    <div className="songs-screen flex flex-col w-full space-y-4 pb-24 select-none max-w-4xl mx-auto">
       {/* 1. Header with Screen Title & Search */}
       <div className="w-full flex items-start justify-between pt-1">
         <div className="flex flex-col">
