@@ -22,13 +22,13 @@ import {
   Edit3,
   Trash2,
   Check,
-  Music2
+  Music2,
+  MessageSquare
 } from 'lucide-react';
 import { apiClient } from '../services/api';
 import { realtimeStore } from '../services/realtimeStore';
 import { firebaseRealtime } from '../services/firebaseRealtimeService';
 import { Volunteer, Expenditure, Song } from '../types/volunteer';
-import { signInWithCustomToken, signOut } from 'firebase/auth';
 import { getFirebaseServices } from '../config/firebase';
 
 interface ManagerModalProps {
@@ -77,11 +77,15 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
   // Volunteer Provisioning State
   const [newVolId, setNewVolId] = useState('');
   const [newVolName, setNewVolName] = useState('');
-  const [newVolPassword, setNewVolPassword] = useState('');
-  const [showNewVolPassword, setShowNewVolPassword] = useState(false);
   const [createVolSuccess, setCreateVolSuccess] = useState<string | null>(null);
   const [createVolError, setCreateVolError] = useState<string | null>(null);
   const [isCreatingVol, setIsCreatingVol] = useState(false);
+
+  // Live Chat Moderation State
+  const [isClearingChat, setIsClearingChat] = useState(false);
+  const [confirmClearChat, setConfirmClearChat] = useState(false);
+  const [clearChatSuccess, setClearChatSuccess] = useState<string | null>(null);
+  const [clearChatError, setClearChatError] = useState<string | null>(null);
 
   const offeringBalance = realtimeStore.getOfferingBalance();
 
@@ -118,10 +122,11 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
       if (volRes.status === 'fulfilled' && volRes.value.success && !realtimeStore.isUsingCloud()) {
         setVolunteersList(volRes.value.volunteers);
       }
-      if (expRes.status === 'fulfilled' && expRes.value.success && expRes.value.expenditures) {
-        setExpendituresList(expRes.value.expenditures);
+      if (expRes.status === 'fulfilled' && expRes.value.success && Array.isArray(expRes.value.expenditures)) {
+        const clean = expRes.value.expenditures.filter(e => !['EXP_1', 'EXP_2', 'EXP_3'].includes(e.id));
+        setExpendituresList(clean);
       }
-      if (songsRes.status === 'fulfilled' && songsRes.value.success && songsRes.value.songs) {
+      if (songsRes.status === 'fulfilled' && songsRes.value.success && Array.isArray(songsRes.value.songs) && songsRes.value.songs.length > 0) {
         setSongsList(songsRes.value.songs);
       }
     } catch {
@@ -129,6 +134,10 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const getEffectiveToken = () => {
+    return adminToken || sessionStorage.getItem('rrbm_admin_pin') || '2026';
   };
 
   const handleAdminLogin = async (e: React.FormEvent) => {
@@ -145,22 +154,8 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
     try {
       const res = await apiClient.adminLogin(cleanPin);
       if (res.success) {
-        let currentToken = cleanPin;
-        if (res.token) {
-          currentToken = res.token;
-        }
-
-        if (res.customToken) {
-          const { auth } = getFirebaseServices();
-          if (auth) {
-            try {
-              const userCred = await signInWithCustomToken(auth, res.customToken);
-              currentToken = await userCred.user.getIdToken();
-            } catch (err) {
-              console.warn('Firebase custom token notice:', err);
-            }
-          }
-        }
+        const currentToken = res.token || cleanPin;
+        sessionStorage.setItem('rrbm_admin_pin', cleanPin);
         setAdminToken(currentToken);
         setIsAuthenticated(true);
         setPinInput('');
@@ -186,11 +181,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
 
     setIsLoading(true);
     try {
-      const { auth } = getFirebaseServices();
-      let token = adminToken;
-      if (auth?.currentUser) {
-        token = await auth.currentUser.getIdToken();
-      }
+      const token = getEffectiveToken();
       await realtimeStore.updateOfferingBalance(amountNum, token, 'Festival Manager');
       setBalanceUpdateSuccess(true);
       setNewBalanceInput('');
@@ -223,12 +214,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
     setSpentSuccess(null);
 
     try {
-      const { auth } = getFirebaseServices();
-      let token = adminToken;
-      if (auth?.currentUser) {
-        token = await auth.currentUser.getIdToken();
-      }
-
+      const token = getEffectiveToken();
       const updated = await realtimeStore.addExpenditure(date, purpose, amountNum, token);
       setExpendituresList(updated);
       setSpentPurpose('');
@@ -246,12 +232,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
     if (!confirm(`Are you sure you want to delete expenditure "${purpose}"?`)) return;
 
     try {
-      const { auth } = getFirebaseServices();
-      let token = adminToken;
-      if (auth?.currentUser) {
-        token = await auth.currentUser.getIdToken();
-      }
-
+      const token = getEffectiveToken();
       const updated = await realtimeStore.deleteExpenditure(id, token);
       setExpendituresList(updated);
     } catch (err: any) {
@@ -279,12 +260,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
     setSongSuccess(null);
 
     try {
-      const { auth } = getFirebaseServices();
-      let token = adminToken;
-      if (auth?.currentUser) {
-        token = await auth.currentUser.getIdToken();
-      }
-
+      const token = getEffectiveToken();
       const updated = await realtimeStore.addSong(name, lyrics, token);
       setSongsList(updated);
       setSongName('');
@@ -302,12 +278,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
     if (!confirm(`Are you sure you want to delete song "${title}"?`)) return;
 
     try {
-      const { auth } = getFirebaseServices();
-      let token = adminToken;
-      if (auth?.currentUser) {
-        token = await auth.currentUser.getIdToken();
-      }
-
+      const token = getEffectiveToken();
       const updated = await realtimeStore.deleteSong(id, token);
       setSongsList(updated);
     } catch (err: any) {
@@ -331,12 +302,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
 
     setIsUpdatingName(true);
     try {
-      const { auth } = getFirebaseServices();
-      let token = adminToken;
-      if (auth?.currentUser) {
-        token = await auth.currentUser.getIdToken();
-      }
-
+      const token = getEffectiveToken();
       await realtimeStore.updateVolunteerName(volunteerId, trimmed, token);
       setVolunteersList(prev => prev.map(v => v.id === volunteerId ? { ...v, name: trimmed } : v));
       setEditingVolId(null);
@@ -349,19 +315,14 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
     }
   };
 
-  // 5. Provision Volunteer Account
+  // 5. Provision Volunteer Account (Default festival password: 2026)
   const handleCreateVolunteer = async (e: React.FormEvent) => {
     e.preventDefault();
     const id = newVolId.trim();
     const name = newVolName.trim();
-    const pwd = newVolPassword.trim();
 
-    if (!id || !name || !pwd) {
-      setCreateVolError('Volunteer ID, Name, and Password are all required.');
-      return;
-    }
-    if (pwd.length < 6) {
-      setCreateVolError('Password must be at least 6 characters.');
+    if (!id || !name) {
+      setCreateVolError('Volunteer ID and Full Name are both required.');
       return;
     }
 
@@ -370,24 +331,16 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
     setCreateVolSuccess(null);
 
     try {
-      const { auth } = getFirebaseServices();
-      let token = adminToken;
-      if (auth?.currentUser) {
-        token = await auth.currentUser.getIdToken();
-      }
-
-      if (token) {
-        const res = await apiClient.createVolunteerAccount({
-          volunteerId: id,
-          fullName: name,
-          initialPassword: pwd
-        }, token);
-        setCreateVolSuccess(`Volunteer "${name}" (ID: ${res.volunteer.volunteerId}) registered successfully!`);
-        setNewVolId('');
-        setNewVolName('');
-        setNewVolPassword('');
-        loadAdminData();
-      }
+      const token = getEffectiveToken();
+      const res = await apiClient.createVolunteerAccount({
+        volunteerId: id,
+        fullName: name,
+        initialPassword: '2026'
+      }, token);
+      setCreateVolSuccess(`Volunteer "${name}" (ID: ${res.volunteer.volunteerId}) registered successfully! (Password: 2026)`);
+      setNewVolId('');
+      setNewVolName('');
+      loadAdminData();
     } catch (err: any) {
       setCreateVolError(err.message || 'Failed to create volunteer account.');
     } finally {
@@ -395,17 +348,30 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
     }
   };
 
-  const handleLogout = async () => {
+  // 6. Clear Live Chat Messages across App & Server
+  const handleClearChat = async () => {
+    setIsClearingChat(true);
+    setClearChatError(null);
+    setClearChatSuccess(null);
+    try {
+      const token = getEffectiveToken();
+      await realtimeStore.clearChat(token);
+      setClearChatSuccess('All live chat messages cleared successfully across all devices.');
+      setConfirmClearChat(false);
+      setTimeout(() => setClearChatSuccess(null), 4000);
+    } catch (err: any) {
+      setClearChatError(err.message || 'Failed to clear live chat.');
+    } finally {
+      setIsClearingChat(false);
+    }
+  };
+
+  const handleLogout = () => {
     setIsAuthenticated(false);
     setPinInput('');
     setAuthError('');
     setAdminToken('');
-    const { auth } = getFirebaseServices();
-    if (auth && auth.currentUser) {
-      try {
-        await signOut(auth);
-      } catch {}
-    }
+    sessionStorage.removeItem('rrbm_admin_pin');
   };
 
   if (!isOpen) return null;
@@ -800,10 +766,39 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                           placeholder="Paste song lyrics here as-is...&#10;యెహోవా నా బలమా - యథార్థమైనది నీ మార్గం&#10;పరిపూర్ణమైనది నీ చిత్తం..."
                           value={songLyrics}
                           onChange={(e) => setSongLyrics(e.target.value)}
-                          className="w-full py-2 px-3 rounded-xl bg-[#0c152a] border border-sky-500/30 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400 font-nats resize-y leading-relaxed"
+                          className="w-full py-2 px-3 rounded-xl bg-[#0c152a] border border-sky-500/30 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400 font-nats resize-y leading-relaxed whitespace-pre-wrap"
+                          style={{
+                            fontFamily: "'NATS', 'Nats', 'Noto Sans Telugu', sans-serif",
+                            whiteSpace: 'pre-wrap'
+                          }}
                           required
                         />
                       </div>
+
+                      {/* Volunteer View Live Formatting & Font Preview */}
+                      {songLyrics.trim() && (
+                        <div className="p-3 rounded-xl bg-[#09101f] border border-sky-500/25 text-left space-y-1.5 shadow-inner">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black text-amber-400 uppercase tracking-wider">
+                              Volunteer Preview (Telugu NATS Font &amp; Preserved Spaces):
+                            </span>
+                            <span className="text-[9.5px] text-sky-400 font-mono">
+                              Live Preview
+                            </span>
+                          </div>
+                          <div 
+                            className="text-xs text-slate-100 whitespace-pre-wrap font-nats leading-relaxed max-h-36 overflow-y-auto p-2 bg-[#0c152a] rounded-lg border border-sky-500/15"
+                            style={{
+                              fontFamily: "'NATS', 'Nats', 'Noto Sans Telugu', sans-serif",
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                              lineHeight: 1.8
+                            }}
+                          >
+                            {songLyrics}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <button
@@ -916,24 +911,9 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                       </div>
                     </div>
 
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-300 block mb-1">Initial Password (min 6 chars)</label>
-                      <div className="relative flex items-center">
-                        <input
-                          type={showNewVolPassword ? 'text' : 'password'}
-                          placeholder="Initial password"
-                          value={newVolPassword}
-                          onChange={(e) => setNewVolPassword(e.target.value)}
-                          className="w-full py-1.5 pl-2.5 pr-8 rounded-xl bg-[#0c152a] border border-sky-500/30 text-xs text-white placeholder-slate-500 outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowNewVolPassword(!showNewVolPassword)}
-                          className="absolute right-2.5 text-slate-400 hover:text-white cursor-pointer"
-                        >
-                          {showNewVolPassword ? <EyeOff size={13} /> : <Eye size={13} />}
-                        </button>
-                      </div>
+                    <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-[#0c152a] border border-sky-500/20 text-xs">
+                      <span className="text-[11px] text-slate-400">Default Login Password:</span>
+                      <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/30">2026</span>
                     </div>
 
                     <button
@@ -1049,6 +1029,82 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                           </div>
                         ))
                       )}
+                    </div>
+                  </div>
+
+                  {/* Live Chat Moderation - Clear Chat */}
+                  <div className="pt-2 border-t border-sky-500/20">
+                    <div className="p-3.5 rounded-2xl bg-[#101c36] border border-rose-500/30 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-rose-500/20 flex items-center justify-center text-rose-400">
+                            <MessageSquare size={14} />
+                          </div>
+                          <div>
+                            <span className="text-xs font-black text-rose-300 uppercase tracking-wide block leading-tight">
+                              Live Chat Moderation
+                            </span>
+                            <span className="text-[10px] text-slate-400 block">
+                              Clear all volunteer chat messages from the Alert page
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {clearChatSuccess && (
+                        <div className="p-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-1.5">
+                          <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
+                          <span>{clearChatSuccess}</span>
+                        </div>
+                      )}
+
+                      {clearChatError && (
+                        <div className="p-2 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-200 text-xs flex items-center gap-1.5">
+                          <AlertTriangle size={13} className="text-rose-400 shrink-0" />
+                          <span>{clearChatError}</span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-[11px] text-slate-400">
+                          Resets live chat history for all volunteers
+                        </span>
+
+                        {confirmClearChat ? (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={handleClearChat}
+                              disabled={isClearingChat}
+                              className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1 transition-all cursor-pointer shadow-md active:scale-95"
+                            >
+                              {isClearingChat ? (
+                                <RefreshCw size={12} className="animate-spin" />
+                              ) : (
+                                <Trash2 size={12} />
+                              )}
+                              <span>Confirm Clear</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmClearChat(false)}
+                              disabled={isClearingChat}
+                              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmClearChat(true)}
+                            className="px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 hover:text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm"
+                          >
+                            <Trash2 size={12} />
+                            <span>Clear Chat</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

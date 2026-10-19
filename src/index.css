@@ -4,6 +4,23 @@
    Dark Midnight Charcoal (#080C16, #101726) & Electric Sky Blue (#38BDF8)
    ========================================================================== */
 
+/* Telugu NATS Web Font Declarations */
+@font-face {
+  font-family: 'NATS';
+  src: url('/fonts/NATS-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nats';
+  src: url('/fonts/NATS-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   /* Surface & Background Colors */
   --bg-app: #080C16;
@@ -49,7 +66,7 @@
   /* Typography */
   --font-sans: 'Inter', 'Outfit', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --font-nats: 'NATS', 'Noto Sans Telugu', 'Segoe UI', sans-serif;
+  --font-nats: 'NATS', 'Nats', 'Noto Sans Telugu', 'Segoe UI', sans-serif;
 
   /* Sizing & Mobile Safe Areas */
   --safe-top: env(safe-area-inset-top, 0px);
@@ -60,6 +77,25 @@
 
 .font-nats {
   font-family: var(--font-nats) !important;
+}
+
+/* Whitespace & Lyrics Formatting Preservation Utilities */
+.whitespace-pre-wrap {
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+}
+
+.whitespace-pre-line {
+  white-space: pre-line !important;
+  word-break: break-word !important;
+}
+
+.whitespace-pre {
+  white-space: pre !important;
+}
+
+.whitespace-nowrap {
+  white-space: nowrap !important;
 }
 
 /* ==========================================================================

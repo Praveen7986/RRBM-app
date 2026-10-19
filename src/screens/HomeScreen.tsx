@@ -33,6 +33,54 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  // Dynamic Real-Time Date Calculation for Festival Days:
+  // 20 as D1, 21 as D2, 22 as D3
+  const now = new Date();
+  const targetYear = 2026;
+  const festivalDay1 = new Date(targetYear, 9, 20); // Oct 20 (D1)
+  const festivalDay2 = new Date(targetYear, 9, 21); // Oct 21 (D2)
+  const festivalDay3 = new Date(targetYear, 9, 22); // Oct 22 (D3)
+
+  const todayDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  let watermark = 'D1';
+  let badgeText = 'Starts in 4 days';
+  let badgeColor = '#FBBF24';
+  let badgeBg = 'rgba(245, 158, 11, 0.15)';
+  let badgeBorder = 'rgba(245, 158, 11, 0.35)';
+
+  const diffTime = festivalDay1.getTime() - todayDateOnly.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays > 0) {
+    watermark = 'D1';
+    badgeText = diffDays === 1 ? 'Starts tomorrow' : `Starts in ${diffDays} days`;
+  } else if (todayDateOnly.getTime() === festivalDay1.getTime()) {
+    watermark = 'D1';
+    badgeText = 'Live Now • Day 1 (D1)';
+    badgeColor = '#34D399';
+    badgeBg = 'rgba(16, 185, 129, 0.15)';
+    badgeBorder = 'rgba(16, 185, 129, 0.35)';
+  } else if (todayDateOnly.getTime() === festivalDay2.getTime()) {
+    watermark = 'D2';
+    badgeText = 'Live Now • Day 2 (D2)';
+    badgeColor = '#38BDF8';
+    badgeBg = 'rgba(56, 189, 248, 0.15)';
+    badgeBorder = 'rgba(56, 189, 248, 0.35)';
+  } else if (todayDateOnly.getTime() === festivalDay3.getTime()) {
+    watermark = 'D3';
+    badgeText = 'Live Now • Day 3 (D3)';
+    badgeColor = '#FBBF24';
+    badgeBg = 'rgba(245, 158, 11, 0.15)';
+    badgeBorder = 'rgba(245, 158, 11, 0.35)';
+  } else if (todayDateOnly.getTime() > festivalDay3.getTime()) {
+    watermark = 'D3';
+    badgeText = 'Festival Concluded';
+    badgeColor = '#94A3B8';
+    badgeBg = 'rgba(148, 163, 184, 0.15)';
+    badgeBorder = 'rgba(148, 163, 184, 0.35)';
+  }
+
   return (
     <div className="home-screen flex flex-col w-full space-y-5 pb-6 select-none max-w-4xl mx-auto">
       {/* 1. Top Greeting Header */}
@@ -40,7 +88,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
         <div className="flex flex-col">
           <div className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-sky-400 uppercase tracking-widest mb-1">
             <Sparkles size={13} className="text-sky-400" />
-            <span>October 20–22, 2026 &bull; Three-Day Festival</span>
+            <span>October 20, 21, 22, 2026 &bull; Three-Day Festival</span>
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
@@ -71,7 +119,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
         </button>
       </div>
 
-      {/* 2. Hero Event Card: Three-Day Fasting Prayer with "D3" Watermark */}
+      {/* 2. Hero Event Card: Dynamic Festival Day Watermark (D1 on 20, D2 on 21, D3 on 22) */}
       <div className="hero-event-card p-5 sm:p-6 p-7 flex flex-col justify-between space-y-4">
         {/* Ambient Top Glow */}
         <div 
@@ -79,9 +127,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           style={{ background: 'radial-gradient(circle, rgba(56, 189, 248, 0.18) 0%, transparent 70%)' }} 
         />
 
-        {/* "D3" Watermark */}
+        {/* Real-time D1/D2/D3 Watermark */}
         <div className="hero-watermark" aria-hidden="true">
-          D3
+          {watermark}
         </div>
 
         {/* Top Badges */}
@@ -89,13 +137,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
           <div 
             className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold"
             style={{
-              background: 'rgba(245, 158, 11, 0.15)',
-              border: '1px solid rgba(245, 158, 11, 0.35)',
-              color: '#FBBF24'
+              background: badgeBg,
+              border: `1px solid ${badgeBorder}`,
+              color: badgeColor
             }}
           >
             <Clock size={12} />
-            <span>Starts in 14 days</span>
+            <span>{badgeText}</span>
           </div>
 
           <div 
@@ -128,7 +176,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
         >
           <div className="flex items-center gap-2">
             <Calendar size={15} className="text-sky-400 shrink-0" />
-            <span className="font-semibold">Oct 20–22, 2026</span>
+            <span className="font-semibold">Oct 20, 21, 22, 2026</span>
           </div>
           <div className="flex items-center gap-2">
             <MapPin size={15} className="text-sky-400 shrink-0" />

@@ -203,7 +203,9 @@ export const SongsScreen: React.FC = () => {
               style={{ 
                 fontSize: `${fontSize}px`, 
                 lineHeight: 1.8,
-                fontFamily: "'NATS', 'Noto Sans Telugu', sans-serif"
+                fontFamily: "'NATS', 'Nats', 'Noto Sans Telugu', sans-serif",
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word'
               }}
             >
               {selectedSong.lyrics}

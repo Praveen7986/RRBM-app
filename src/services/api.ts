@@ -197,19 +197,30 @@ export const apiClient = {
     });
   },
 
+  async clearChat(authTokenOrPin?: string): Promise<{ success: boolean; message?: string }> {
+    const pin = authTokenOrPin || '2026';
+    const headers: Record<string, string> = {
+      'x-admin-pin': pin,
+      'Authorization': `Bearer ${pin}`
+    };
+
+    return fetchJson<{ success: boolean; message?: string }>('/api/admin/chat/clear', {
+      method: 'POST',
+      headers
+    });
+  },
+
   // 9. Offering Balance
   async getOfferingBalance(): Promise<{ success: boolean; balance: OfferingBalance }> {
     return fetchJson<{ success: boolean; balance: OfferingBalance }>('/api/balance');
   },
 
-  async updateOfferingBalance(amount: number, authTokenOrPin: string, updatedBy = 'Festival Manager'): Promise<{ success: boolean; balance: OfferingBalance }> {
-    const headers: Record<string, string> = {};
-    if (authTokenOrPin && authTokenOrPin.length > 30) {
-      // Firebase ID token
-      headers['Authorization'] = `Bearer ${authTokenOrPin}`;
-    } else {
-      headers['x-admin-pin'] = authTokenOrPin;
-    }
+  async updateOfferingBalance(amount: number, authTokenOrPin?: string, updatedBy = 'Festival Manager'): Promise<{ success: boolean; balance: OfferingBalance }> {
+    const pin = authTokenOrPin || '2026';
+    const headers: Record<string, string> = {
+      'x-admin-pin': pin,
+      'Authorization': `Bearer ${pin}`
+    };
 
     return fetchJson<{ success: boolean; balance: OfferingBalance }>('/api/balance', {
       method: 'POST',
@@ -225,14 +236,13 @@ export const apiClient = {
 
   async addExpenditure(
     exp: { date: string; purpose: string; amount: number },
-    authTokenOrPin: string
+    authTokenOrPin?: string
   ): Promise<{ success: boolean; expenditure: Expenditure; expenditures: Expenditure[] }> {
-    const headers: Record<string, string> = {};
-    if (authTokenOrPin && authTokenOrPin.length > 30) {
-      headers['Authorization'] = `Bearer ${authTokenOrPin}`;
-    } else {
-      headers['x-admin-pin'] = authTokenOrPin;
-    }
+    const pin = authTokenOrPin || '2026';
+    const headers: Record<string, string> = {
+      'x-admin-pin': pin,
+      'Authorization': `Bearer ${pin}`
+    };
 
     return fetchJson<{ success: boolean; expenditure: Expenditure; expenditures: Expenditure[] }>('/api/spent', {
       method: 'POST',
@@ -243,14 +253,13 @@ export const apiClient = {
 
   async deleteExpenditure(
     id: string,
-    authTokenOrPin: string
+    authTokenOrPin?: string
   ): Promise<{ success: boolean; expenditures: Expenditure[] }> {
-    const headers: Record<string, string> = {};
-    if (authTokenOrPin && authTokenOrPin.length > 30) {
-      headers['Authorization'] = `Bearer ${authTokenOrPin}`;
-    } else {
-      headers['x-admin-pin'] = authTokenOrPin;
-    }
+    const pin = authTokenOrPin || '2026';
+    const headers: Record<string, string> = {
+      'x-admin-pin': pin,
+      'Authorization': `Bearer ${pin}`
+    };
 
     return fetchJson<{ success: boolean; expenditures: Expenditure[] }>(`/api/spent/${id}`, {
       method: 'DELETE',
@@ -271,39 +280,54 @@ export const apiClient = {
     params: {
       volunteerId: string;
       fullName: string;
-      initialPassword: string;
+      initialPassword?: string;
       phone?: string;
       role?: string;
     },
-    adminIdToken: string
+    adminIdToken?: string
   ): Promise<{ success: boolean; message: string; volunteer: { volunteerId: string; uid: string; name: string } }> {
+    const pin = adminIdToken || '2026';
+    const headers: Record<string, string> = {
+      'x-admin-pin': pin,
+      'Authorization': `Bearer ${pin}`
+    };
+
     return fetchJson<{ success: boolean; message: string; volunteer: { volunteerId: string; uid: string; name: string } }>('/api/admin/volunteers/create', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${adminIdToken}`
-      },
-      body: JSON.stringify(params)
+      headers,
+      body: JSON.stringify({
+        ...params,
+        initialPassword: params.initialPassword || '2026'
+      })
     });
   },
 
   // 10c. Update Volunteer Status (Active / Inactive)
-  async updateVolunteerStatus(volunteerId: string, active: boolean, adminIdToken: string): Promise<{ success: boolean; volunteerId: string; active: boolean }> {
+  async updateVolunteerStatus(volunteerId: string, active: boolean, adminIdToken?: string): Promise<{ success: boolean; volunteerId: string; active: boolean }> {
+    const pin = adminIdToken || '2026';
+    const headers: Record<string, string> = {
+      'x-admin-pin': pin,
+      'Authorization': `Bearer ${pin}`
+    };
+
     return fetchJson<{ success: boolean; volunteerId: string; active: boolean }>('/api/admin/volunteers/status', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${adminIdToken}`
-      },
+      headers,
       body: JSON.stringify({ volunteerId, active })
     });
   },
 
   // 10d. Reset Volunteer Password (Admin Only)
-  async resetVolunteerPassword(volunteerId: string, newPassword: string, adminIdToken: string): Promise<{ success: boolean; message: string }> {
+  async resetVolunteerPassword(volunteerId: string, newPassword: string, adminIdToken?: string): Promise<{ success: boolean; message: string }> {
+    const pin = adminIdToken || '2026';
+    const headers: Record<string, string> = {
+      'x-admin-pin': pin,
+      'Authorization': `Bearer ${pin}`
+    };
+
     return fetchJson<{ success: boolean; message: string }>('/api/admin/volunteers/reset-password', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${adminIdToken}`
-      },
+      headers,
       body: JSON.stringify({ volunteerId, newPassword })
     });
   },
@@ -312,14 +336,13 @@ export const apiClient = {
   async updateVolunteerName(
     volunteerId: string,
     name: string,
-    authTokenOrPin: string
+    authTokenOrPin?: string
   ): Promise<{ success: boolean; volunteer: Volunteer }> {
-    const headers: Record<string, string> = {};
-    if (authTokenOrPin && authTokenOrPin.length > 30) {
-      headers['Authorization'] = `Bearer ${authTokenOrPin}`;
-    } else {
-      headers['x-admin-pin'] = authTokenOrPin;
-    }
+    const pin = authTokenOrPin || '2026';
+    const headers: Record<string, string> = {
+      'x-admin-pin': pin,
+      'Authorization': `Bearer ${pin}`
+    };
 
     return fetchJson<{ success: boolean; volunteer: Volunteer }>('/api/admin/volunteers/update-name', {
       method: 'POST',
@@ -329,13 +352,12 @@ export const apiClient = {
   },
 
   // 11. Manager Stats
-  async getAdminStats(authTokenOrPin: string): Promise<{ success: boolean; stats: any }> {
-    const headers: Record<string, string> = {};
-    if (authTokenOrPin && authTokenOrPin.length > 30) {
-      headers['Authorization'] = `Bearer ${authTokenOrPin}`;
-    } else {
-      headers['x-admin-pin'] = authTokenOrPin;
-    }
+  async getAdminStats(authTokenOrPin?: string): Promise<{ success: boolean; stats: any }> {
+    const pin = authTokenOrPin || '2026';
+    const headers: Record<string, string> = {
+      'x-admin-pin': pin,
+      'Authorization': `Bearer ${pin}`
+    };
     return fetchJson<{ success: boolean; stats: any }>('/api/admin/stats', {
       headers
     });
@@ -356,14 +378,13 @@ export const apiClient = {
 
   async addSong(
     song: { title: string; lyrics: string; category?: string; day?: string; key?: string },
-    authTokenOrPin: string
+    authTokenOrPin?: string
   ): Promise<{ success: boolean; song: Song; songs: Song[] }> {
-    const headers: Record<string, string> = {};
-    if (authTokenOrPin && authTokenOrPin.length > 30) {
-      headers['Authorization'] = `Bearer ${authTokenOrPin}`;
-    } else {
-      headers['x-admin-pin'] = authTokenOrPin;
-    }
+    const pin = authTokenOrPin || '2026';
+    const headers: Record<string, string> = {
+      'x-admin-pin': pin,
+      'Authorization': `Bearer ${pin}`
+    };
 
     return fetchJson<{ success: boolean; song: Song; songs: Song[] }>('/api/songs', {
       method: 'POST',
@@ -374,14 +395,13 @@ export const apiClient = {
 
   async deleteSong(
     songId: string,
-    authTokenOrPin: string
+    authTokenOrPin?: string
   ): Promise<{ success: boolean; songs: Song[] }> {
-    const headers: Record<string, string> = {};
-    if (authTokenOrPin && authTokenOrPin.length > 30) {
-      headers['Authorization'] = `Bearer ${authTokenOrPin}`;
-    } else {
-      headers['x-admin-pin'] = authTokenOrPin;
-    }
+    const pin = authTokenOrPin || '2026';
+    const headers: Record<string, string> = {
+      'x-admin-pin': pin,
+      'Authorization': `Bearer ${pin}`
+    };
 
     return fetchJson<{ success: boolean; songs: Song[] }>(`/api/songs/${encodeURIComponent(songId)}`, {
       method: 'DELETE',

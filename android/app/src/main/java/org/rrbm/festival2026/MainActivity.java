@@ -14,8 +14,8 @@ import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
 
-    public static final String CHANNEL_ALERTS_ID = "rrbm_alerts_channel";
-    public static final String CHANNEL_CHAT_ID = "rrbm_chat_channel";
+    public static final String CHANNEL_ALERTS_ID = "rrbm_alerts_headsup_v3";
+    public static final String CHANNEL_CHAT_ID = "rrbm_chat_headsup_v3";
     public static final String CHANNEL_GENERAL_ID = "rrbm_general_channel";
 
     @Override
@@ -43,19 +43,31 @@ public class MainActivity extends BridgeActivity {
     }
 
     /**
-     * Creates dedicated Android Notification Channels:
-     * 1. RRBM ALERTS (High Importance, Strong Vibration Pattern, Lockscreen Public)
-     * 2. RRBM LIVE CHAT (Default Importance, Chat Vibration)
-     * 3. RRBM GENERAL (Default/Low Importance)
+     * Creates dedicated Android Notification Channels with Heads-Up High Importance:
+     * 1. RRBM URGENT ALERTS (High Importance, Strong Vibration Pattern, Lockscreen Public)
+     * 2. RRBM LIVE CHAT (High Importance, Heads-Up Banner Over Other Apps, Chat Vibration)
+     * 3. RRBM GENERAL (Low Importance Ongoing Service Indicator)
      */
     private void createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (notificationManager == null) return;
 
-            // --- Channel 1: RRBM ALERTS (HIGH Priority Leader Emergency Calls) ---
-            CharSequence alertChannelName = "RRBM ALERTS";
-            String alertChannelDesc = "High-priority leader emergency calls and urgent prayer alerts";
+            // Delete legacy cached channels that were stuck with IMPORTANCE_DEFAULT
+            try {
+                notificationManager.deleteNotificationChannel("rrbm_alerts_channel");
+                notificationManager.deleteNotificationChannel("rrbm_chat_channel");
+            } catch (Exception ignored) {}
+
+            Uri defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+            AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)
+                    .build();
+
+            // --- Channel 1: RRBM URGENT ALERTS (HIGH Priority Leader Emergency Calls) ---
+            CharSequence alertChannelName = "🚨 RRBM URGENT ALERTS";
+            String alertChannelDesc = "High-priority leader emergency calls and urgent prayer alerts with pop-up banner";
             int alertImportance = NotificationManager.IMPORTANCE_HIGH;
             NotificationChannel alertChannel = new NotificationChannel(CHANNEL_ALERTS_ID, alertChannelName, alertImportance);
             alertChannel.setDescription(alertChannelDesc);
@@ -65,32 +77,28 @@ public class MainActivity extends BridgeActivity {
             alertChannel.setVibrationPattern(new long[]{0, 500, 200, 500, 200, 800});
             alertChannel.setShowBadge(true);
             alertChannel.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
-
-            Uri defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
-            AudioAttributes audioAttributes = new AudioAttributes.Builder()
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
-                    .build();
             alertChannel.setSound(defaultSoundUri, audioAttributes);
 
-            // --- Channel 2: RRBM LIVE CHAT (Default Priority Volunteer Chat) ---
-            CharSequence chatChannelName = "RRBM LIVE CHAT";
-            String chatChannelDesc = "Real-time volunteer chat messages and coordination replies";
-            int chatImportance = NotificationManager.IMPORTANCE_DEFAULT;
+            // --- Channel 2: RRBM LIVE CHAT (HIGH Priority Heads-Up Display Over Any App) ---
+            CharSequence chatChannelName = "💬 RRBM LIVE CHAT";
+            String chatChannelDesc = "Real-time volunteer chat messages with heads-up banner over any display";
+            int chatImportance = NotificationManager.IMPORTANCE_HIGH; // HIGH: Pop up over any active app!
             NotificationChannel chatChannel = new NotificationChannel(CHANNEL_CHAT_ID, chatChannelName, chatImportance);
             chatChannel.setDescription(chatChannelDesc);
             chatChannel.enableLights(true);
             chatChannel.enableVibration(true);
-            chatChannel.setVibrationPattern(new long[]{0, 150, 100, 150});
+            chatChannel.setVibrationPattern(new long[]{0, 250, 150, 250});
             chatChannel.setShowBadge(true);
+            chatChannel.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+            chatChannel.setSound(defaultSoundUri, audioAttributes);
 
-            // --- Channel 3: RRBM GENERAL (General Festival Updates) ---
+            // --- Channel 3: RRBM GENERAL (Background Active Indicator) ---
             CharSequence generalChannelName = "RRBM GENERAL";
-            String generalChannelDesc = "Schedule updates, song sheets, and general festival notifications";
-            int generalImportance = NotificationManager.IMPORTANCE_DEFAULT;
+            String generalChannelDesc = "Background network connectivity and standing alert indicator";
+            int generalImportance = NotificationManager.IMPORTANCE_LOW;
             NotificationChannel generalChannel = new NotificationChannel(CHANNEL_GENERAL_ID, generalChannelName, generalImportance);
             generalChannel.setDescription(generalChannelDesc);
-            generalChannel.setShowBadge(true);
+            generalChannel.setShowBadge(false);
 
             notificationManager.createNotificationChannel(alertChannel);
             notificationManager.createNotificationChannel(chatChannel);

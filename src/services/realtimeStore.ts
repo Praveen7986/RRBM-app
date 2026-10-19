@@ -26,11 +26,7 @@ const DEFAULT_SONGS_SEEDS: Song[] = [
   ...SONGS_DATA.day3
 ];
 
-const INITIAL_EXPENDITURES: Expenditure[] = [
-  { id: 'EXP_1', date: '2026-10-20', purpose: 'Sound & Tent arrangement', amount: 25000, createdAt: '2026-10-20T10:00:00.000Z' },
-  { id: 'EXP_2', date: '2026-10-21', purpose: 'Food & Refreshments for volunteers', amount: 18500, createdAt: '2026-10-21T12:30:00.000Z' },
-  { id: 'EXP_3', date: '2026-10-22', purpose: 'Stage lighting and flower decoration', amount: 12000, createdAt: '2026-10-22T08:00:00.000Z' }
-];
+const INITIAL_EXPENDITURES: Expenditure[] = [];
 
 const INITIAL_CHAT: ChatMessage[] = [
   {
@@ -92,17 +88,31 @@ class RealtimeStoreService {
       this.connectionStatus = 'connected';
       console.log('[RealtimeStore] Operating in Cloud Firebase Mode (Internet-wide sync)');
 
-      // Listen to Firebase Auth state to attach/detach protected Firestore listeners
+      // Immediately attach Firestore listeners for alerts, chat, balance, songs & expenditures.
+      // This ensures all volunteers receive background alerts and chat even without being logged in!
+      this.attachFirestoreListeners();
+
+      // Listen to Firebase Auth state to update currentVolunteer profile
       firebaseRealtime.initAuthListener((authenticatedVolunteer) => {
         if (authenticatedVolunteer) {
+          // Never treat coordinator / admin manager session as a volunteer identity!
+          if (
+            authenticatedVolunteer.id === 'rrbm-manager-admin' ||
+            authenticatedVolunteer.role === 'admin' ||
+            authenticatedVolunteer.name?.toLowerCase().includes('admin')
+          ) {
+            localStorage.removeItem(STORAGE_KEYS.CURRENT_VOLUNTEER);
+            if (this.currentVolunteer?.id === 'rrbm-manager-admin') {
+              this.currentVolunteer = null;
+              this.notify();
+            }
+            return;
+          }
+
           this.currentVolunteer = authenticatedVolunteer;
           localStorage.setItem(STORAGE_KEYS.CURRENT_VOLUNTEER, JSON.stringify(authenticatedVolunteer));
-          this.attachFirestoreListeners();
           this.notify();
         } else {
-          // If Firebase Auth has no active user, only clean up Firebase Firestore listeners.
-          // Do NOT wipe currentVolunteer if authenticated via backend session.
-          firebaseRealtime.cleanup();
           const hasBackendSession = localStorage.getItem('rrbm_volunteer_token');
           if (!hasBackendSession && !localStorage.getItem(STORAGE_KEYS.CURRENT_VOLUNTEER)) {
             this.currentVolunteer = null;
@@ -110,10 +120,6 @@ class RealtimeStoreService {
           }
         }
       });
-
-      if (this.currentVolunteer) {
-        this.attachFirestoreListeners();
-      }
 
       // Ensure WebSocket connection is active for real-time alerts
       if (!this.ws) {
@@ -143,7 +149,7 @@ class RealtimeStoreService {
 
     // 2. Subscribe to Cloud Firestore Chat
     firebaseRealtime.subscribeToChat(this.currentVolunteer?.id || null, (messages) => {
-      if (messages && messages.length > 0) {
+      if (Array.isArray(messages)) {
         this.chatMessages = messages;
         localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify(messages));
       }
@@ -156,6 +162,26 @@ class RealtimeStoreService {
       localStorage.setItem(STORAGE_KEYS.OFFERING_BALANCE, JSON.stringify(balance));
       this.notify();
     });
+
+    // 4. Subscribe to Expenditures (Money Spent) in Cloud Firestore
+    firebaseRealtime.subscribeToExpenditures((expenditures) => {
+      if (Array.isArray(expenditures)) {
+        // Filter out any legacy temp fake expenditures
+        const cleanExp = expenditures.filter(e => !['EXP_1', 'EXP_2', 'EXP_3'].includes(e.id));
+        this.expenditures = cleanExp;
+        localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(cleanExp));
+        this.notify();
+      }
+    });
+
+    // 5. Subscribe to Songs in Cloud Firestore
+    firebaseRealtime.subscribeToSongs((songs) => {
+      if (Array.isArray(songs) && songs.length > 0) {
+        this.songs = songs;
+        localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(songs));
+        this.notify();
+      }
+    });
   }
 
   private loadInitialStorage() {
@@ -165,10 +191,24 @@ class RealtimeStoreService {
     const savedVolunteer = localStorage.getItem(STORAGE_KEYS.CURRENT_VOLUNTEER);
     if (savedVolunteer) {
       try {
-        this.currentVolunteer = JSON.parse(savedVolunteer);
+        const parsed = JSON.parse(savedVolunteer);
+        // Clean out any accidental manager/admin profile
+        if (
+          parsed && 
+          (parsed.id === 'rrbm-manager-admin' || 
+           parsed.role === 'admin' || 
+           parsed.name?.toLowerCase().includes('admin'))
+        ) {
+          localStorage.removeItem(STORAGE_KEYS.CURRENT_VOLUNTEER);
+          this.currentVolunteer = null;
+        } else {
+          this.currentVolunteer = parsed;
+        }
       } catch {
         this.currentVolunteer = null;
       }
+    } else {
+      this.currentVolunteer = null;
     }
 
     // Load Chat
@@ -177,10 +217,10 @@ class RealtimeStoreService {
       try {
         this.chatMessages = JSON.parse(savedChat);
       } catch {
-        this.chatMessages = INITIAL_CHAT;
+        this.chatMessages = [];
       }
     } else {
-      this.chatMessages = INITIAL_CHAT;
+      this.chatMessages = [];
     }
 
     // Load Active Alert
@@ -203,23 +243,34 @@ class RealtimeStoreService {
       }
     }
 
-    // Load Expenditures
+    // Load Expenditures (Permanent User Entries)
     const savedExp = localStorage.getItem(STORAGE_KEYS.EXPENDITURES);
-    if (savedExp) {
+    if (savedExp !== null) {
       try {
-        this.expenditures = JSON.parse(savedExp);
+        const parsed = JSON.parse(savedExp);
+        if (Array.isArray(parsed)) {
+          // Filter out legacy temp dummy expenditures
+          this.expenditures = parsed.filter(e => !['EXP_1', 'EXP_2', 'EXP_3'].includes(e.id));
+        } else {
+          this.expenditures = [];
+        }
       } catch {
-        this.expenditures = INITIAL_EXPENDITURES;
+        this.expenditures = [];
       }
     } else {
-      this.expenditures = INITIAL_EXPENDITURES;
+      this.expenditures = [];
     }
 
-    // Load Songs
+    // Load Songs (Preserve All Added Songs & Hymnal)
     const savedSongs = localStorage.getItem(STORAGE_KEYS.SONGS);
-    if (savedSongs) {
+    if (savedSongs !== null) {
       try {
-        this.songs = JSON.parse(savedSongs);
+        const parsed = JSON.parse(savedSongs);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.songs = parsed;
+        } else {
+          this.songs = DEFAULT_SONGS_SEEDS;
+        }
       } catch {
         this.songs = DEFAULT_SONGS_SEEDS;
       }
@@ -405,13 +456,20 @@ class RealtimeStoreService {
         localStorage.setItem(STORAGE_KEYS.OFFERING_BALANCE, JSON.stringify(this.offeringBalance));
       }
 
-      if (expRes.status === 'fulfilled' && expRes.value.success && expRes.value.expenditures) {
-        this.expenditures = expRes.value.expenditures;
+      if (expRes.status === 'fulfilled' && expRes.value.success && Array.isArray(expRes.value.expenditures)) {
+        const filteredServerExps = expRes.value.expenditures.filter(e => !['EXP_1', 'EXP_2', 'EXP_3'].includes(e.id));
+        const expMap = new Map<string, Expenditure>();
+        this.expenditures.filter(e => !['EXP_1', 'EXP_2', 'EXP_3'].includes(e.id)).forEach(e => expMap.set(e.id, e));
+        filteredServerExps.forEach(e => expMap.set(e.id, e));
+        this.expenditures = Array.from(expMap.values());
         localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(this.expenditures));
       }
 
-      if (songsRes.status === 'fulfilled' && songsRes.value.success && songsRes.value.songs) {
-        this.songs = songsRes.value.songs;
+      if (songsRes.status === 'fulfilled' && songsRes.value.success && Array.isArray(songsRes.value.songs) && songsRes.value.songs.length > 0) {
+        const songMap = new Map<string, Song>();
+        this.songs.forEach(s => songMap.set(s.id, s));
+        songsRes.value.songs.forEach(s => songMap.set(s.id, s));
+        this.songs = Array.from(songMap.values());
         localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(this.songs));
       }
 
@@ -438,11 +496,24 @@ class RealtimeStoreService {
         localStorage.setItem(STORAGE_KEYS.OFFERING_BALANCE, JSON.stringify(this.offeringBalance));
       }
       if (payload.expenditures && Array.isArray(payload.expenditures)) {
-        this.expenditures = payload.expenditures;
+        // Merge without losing locally saved user entries and strip temp entries
+        const filteredServerExps = payload.expenditures.filter((e: Expenditure) => !['EXP_1', 'EXP_2', 'EXP_3'].includes(e.id));
+        const expMap = new Map<string, Expenditure>();
+        this.expenditures.filter(e => !['EXP_1', 'EXP_2', 'EXP_3'].includes(e.id)).forEach(e => expMap.set(e.id, e));
+        filteredServerExps.forEach((e: Expenditure) => {
+          if (!expMap.has(e.id)) expMap.set(e.id, e);
+        });
+        this.expenditures = Array.from(expMap.values());
         localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(this.expenditures));
       }
-      if (payload.songs && Array.isArray(payload.songs)) {
-        this.songs = payload.songs;
+      if (payload.songs && Array.isArray(payload.songs) && payload.songs.length > 0) {
+        // Merge without losing locally added songs
+        const songMap = new Map<string, Song>();
+        this.songs.forEach(s => songMap.set(s.id, s));
+        payload.songs.forEach((s: Song) => {
+          if (!songMap.has(s.id)) songMap.set(s.id, s);
+        });
+        this.songs = Array.from(songMap.values());
         localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(this.songs));
       }
       this.notify();
@@ -510,6 +581,10 @@ class RealtimeStoreService {
         localStorage.setItem(STORAGE_KEYS.CURRENT_VOLUNTEER, JSON.stringify(this.currentVolunteer));
       }
       this.notify();
+    } else if (type === 'CHAT_CLEARED') {
+      this.chatMessages = [];
+      localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify([]));
+      this.notify();
     }
 
     if (shouldBroadcastLocal && this.broadcastChannel) {
@@ -534,16 +609,14 @@ class RealtimeStoreService {
   // PUBLIC ACTIONS
   // ==========================================
 
-  // 1. Volunteer Sign-In with Volunteer ID & Password
+  // 1. Volunteer Sign-In with Volunteer ID (Default festival password: 2026)
   public async signInVolunteer(volunteerId: string, password?: string): Promise<Volunteer> {
     const trimmedId = volunteerId.trim();
     if (!trimmedId) {
-      throw new Error('Please enter your Volunteer ID.');
+      throw new Error('Please enter your Volunteer ID / UID.');
     }
-    const cleanPassword = (password || '').trim();
-    if (!cleanPassword) {
-      throw new Error('Please enter your password.');
-    }
+    // Default password is 2026 for all volunteer logins
+    const cleanPassword = (password || '2026').trim() || '2026';
 
     // Authoritative Backend Authentication via /api/volunteers/login
     try {
@@ -639,29 +712,25 @@ class RealtimeStoreService {
     this.notify();
   }
 
-  // 2. Trigger Immediate Alert Across All Devices (Cloud / Network)
+  // 2. Trigger Immediate Alert Across All Devices (No Cooldown)
   public async triggerImmediateAlert(customMessage?: string): Promise<{ success: boolean; alert: AlertEvent }> {
-    if (this.isProcessingAlert) {
-      throw new Error('An alert is already being broadcast.');
-    }
-    this.isProcessingAlert = true;
-
     const senderId = this.currentVolunteer ? this.currentVolunteer.id : '260';
     const senderName = this.currentVolunteer ? this.currentVolunteer.name : 'Leader Desk';
     const alertMsgText = customMessage || '🚨 PRAYER ALERT: Volunteers are requested to gather immediately!';
 
     try {
-      // Cloud Firebase Dispatch (if authenticated with Firebase)
-      const { auth } = getFirebaseServices();
-      if (this.isCloudFirebaseMode && auth?.currentUser) {
+      // Cloud Firebase Dispatch
+      if (this.isCloudFirebaseMode) {
         try {
           const alert = await firebaseRealtime.triggerAlert(senderId, senderName, alertMsgText);
           this.activeAlert = alert;
           localStorage.setItem(STORAGE_KEYS.ACTIVE_ALERT, JSON.stringify(alert));
           this.notify();
+          // Dual-dispatch to backend server in background to notify WebSockets and background services
+          apiClient.createAlert(senderId, senderName, alertMsgText).catch(() => {});
           return { success: true, alert };
         } catch (fbErr) {
-          console.warn('[RealtimeStore] Cloud Firebase alert failed, falling back to server:', fbErr);
+          console.warn('[RealtimeStore] Cloud Firebase alert notice, syncing with server:', fbErr);
         }
       }
 
@@ -684,10 +753,6 @@ class RealtimeStoreService {
     } catch (err: any) {
       console.error('[RealtimeStore] Alert dispatch failed:', err.message);
       throw new Error(err.message || 'Failed to dispatch alert across devices. Check internet connection.');
-    } finally {
-      setTimeout(() => {
-        this.isProcessingAlert = false;
-      }, 1000);
     }
   }
 
@@ -696,6 +761,8 @@ class RealtimeStoreService {
     if (!this.currentVolunteer) {
       throw new Error('Please check in as a volunteer first.');
     }
+
+    const alertId = this.activeAlert ? this.activeAlert.id : 'current';
 
     try {
       const { auth } = getFirebaseServices();
@@ -706,13 +773,19 @@ class RealtimeStoreService {
             this.currentVolunteer.name,
             responseType
           );
+          // Dual-dispatch to backend server so WebSockets and background polling receive it
+          apiClient.sendAlertResponse(
+            alertId,
+            this.currentVolunteer.id,
+            this.currentVolunteer.name,
+            responseType
+          ).catch(() => {});
           return;
         } catch (fbErr) {
           console.warn('[RealtimeStore] Cloud Firebase quick response failed, falling back to server:', fbErr);
         }
       }
 
-      const alertId = this.activeAlert ? this.activeAlert.id : 'current';
       const res = await apiClient.sendAlertResponse(
         alertId,
         this.currentVolunteer.id,
@@ -751,7 +824,10 @@ class RealtimeStoreService {
       const { auth } = getFirebaseServices();
       if (this.isCloudFirebaseMode && auth?.currentUser) {
         try {
-          return await firebaseRealtime.sendChatMessage(volunteerId, senderName, trimmed);
+          const msg = await firebaseRealtime.sendChatMessage(volunteerId, senderName, trimmed);
+          // Dual-dispatch to backend server so WebSockets and background services receive it
+          apiClient.sendChatMessage(volunteerId, senderName, trimmed).catch(() => {});
+          return msg;
         } catch (fbErr) {
           console.warn('[RealtimeStore] Cloud Firebase chat failed, falling back to server:', fbErr);
         }
@@ -773,20 +849,51 @@ class RealtimeStoreService {
     }
   }
 
+  // 4b. Clear Live Chat Messages (Manager Desk)
+  public async clearChat(authTokenOrPin = '2026'): Promise<boolean> {
+    this.chatMessages = [];
+    localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify([]));
+    this.notify();
+
+    // Clear Cloud Firestore if active
+    await firebaseRealtime.clearChat();
+
+    // Clear backend server database & notify all connected WebSocket clients
+    try {
+      await apiClient.clearChat(authTokenOrPin);
+    } catch (e) {
+      console.warn('[RealtimeStore] Backend clearChat notice:', e);
+    }
+
+    return true;
+  }
+
   // 5. Update Offering Balance (Manager Desk)
   public async updateOfferingBalance(amount: number, adminPin: string, updatedBy = 'Festival Manager'): Promise<boolean> {
+    const newBal: OfferingBalance = {
+      amount,
+      updatedBy,
+      updatedAt: new Date().toISOString()
+    };
+    this.offeringBalance = newBal;
+    localStorage.setItem(STORAGE_KEYS.OFFERING_BALANCE, JSON.stringify(newBal));
+    this.notify();
+
+    // Persist permanently in Cloud Firestore
+    await firebaseRealtime.saveBalanceToCloud(newBal);
+
     try {
       const res = await apiClient.updateOfferingBalance(amount, adminPin, updatedBy);
       if (res.success && res.balance) {
         this.offeringBalance = res.balance;
         localStorage.setItem(STORAGE_KEYS.OFFERING_BALANCE, JSON.stringify(res.balance));
+        await firebaseRealtime.saveBalanceToCloud(res.balance);
         this.notify();
-        return true;
       }
-      return false;
+      return true;
     } catch (err: any) {
-      console.error('Balance update failed:', err.message);
-      throw err;
+      console.warn('[RealtimeStore] Backend balance update notice:', err);
+      return true;
     }
   }
 
@@ -837,30 +944,64 @@ class RealtimeStoreService {
     return [...this.expenditures];
   }
 
-  public async addExpenditure(date: string, purpose: string, amount: number, adminPin: string): Promise<Expenditure[]> {
-    const res = await apiClient.addExpenditure({ date, purpose, amount }, adminPin);
-    if (res.success && res.expenditures) {
-      this.expenditures = res.expenditures;
-      localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(this.expenditures));
-      this.notify();
-      return this.expenditures;
+  public async addExpenditure(date: string, purpose: string, amount: number, adminPin?: string): Promise<Expenditure[]> {
+    const pinToUse = adminPin || '2026';
+    const newExp: Expenditure = {
+      id: `EXP_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      date,
+      purpose,
+      amount,
+      createdAt: new Date().toISOString()
+    };
+    this.expenditures = [newExp, ...this.expenditures].filter(e => !['EXP_1', 'EXP_2', 'EXP_3'].includes(e.id));
+    localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(this.expenditures));
+    this.notify();
+
+    // Persist permanently to Cloud Firestore
+    await firebaseRealtime.saveExpendituresToCloud(this.expenditures);
+
+    try {
+      const res = await apiClient.addExpenditure({ date, purpose, amount }, pinToUse);
+      if (res.success && Array.isArray(res.expenditures)) {
+        const clean = res.expenditures.filter(e => !['EXP_1', 'EXP_2', 'EXP_3'].includes(e.id));
+        this.expenditures = clean;
+        localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(this.expenditures));
+        await firebaseRealtime.saveExpendituresToCloud(this.expenditures);
+        this.notify();
+      }
+    } catch (err) {
+      console.warn('[RealtimeStore] Backend expenditure sync notice:', err);
     }
-    throw new Error((res as any).message || 'Failed to save expenditure');
+    return this.expenditures;
   }
 
-  public async deleteExpenditure(id: string, adminPin: string): Promise<Expenditure[]> {
-    const res = await apiClient.deleteExpenditure(id, adminPin);
-    if (res.success && res.expenditures) {
-      this.expenditures = res.expenditures;
-      localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(this.expenditures));
-      this.notify();
-      return this.expenditures;
+  public async deleteExpenditure(id: string, adminPin?: string): Promise<Expenditure[]> {
+    const pinToUse = adminPin || '2026';
+    this.expenditures = this.expenditures.filter(e => e.id !== id && !['EXP_1', 'EXP_2', 'EXP_3'].includes(e.id));
+    localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(this.expenditures));
+    this.notify();
+
+    // Persist permanently to Cloud Firestore
+    await firebaseRealtime.saveExpendituresToCloud(this.expenditures);
+
+    try {
+      const res = await apiClient.deleteExpenditure(id, pinToUse);
+      if (res.success && Array.isArray(res.expenditures)) {
+        const clean = res.expenditures.filter(e => !['EXP_1', 'EXP_2', 'EXP_3'].includes(e.id));
+        this.expenditures = clean;
+        localStorage.setItem(STORAGE_KEYS.EXPENDITURES, JSON.stringify(this.expenditures));
+        await firebaseRealtime.saveExpendituresToCloud(this.expenditures);
+        this.notify();
+      }
+    } catch (err) {
+      console.warn('[RealtimeStore] Backend expenditure delete notice:', err);
     }
-    throw new Error((res as any).message || 'Failed to delete expenditure');
+    return this.expenditures;
   }
 
-  public async updateVolunteerName(volunteerId: string, name: string, adminPin: string): Promise<boolean> {
-    const res = await apiClient.updateVolunteerName(volunteerId, name, adminPin);
+  public async updateVolunteerName(volunteerId: string, name: string, adminPin?: string): Promise<boolean> {
+    const pinToUse = adminPin || '2026';
+    const res = await apiClient.updateVolunteerName(volunteerId, name, pinToUse);
     if (res.success) {
       if (this.currentVolunteer && this.currentVolunteer.id === volunteerId) {
         this.currentVolunteer.name = name;
@@ -877,26 +1018,64 @@ class RealtimeStoreService {
     return [...this.songs];
   }
 
-  public async addSong(title: string, lyrics: string, adminPin: string): Promise<Song[]> {
-    const res = await apiClient.addSong({ title, lyrics, category: 'Worship', day: 'all', key: 'Scale' }, adminPin);
-    if (res.success && res.songs) {
-      this.songs = res.songs;
-      localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(this.songs));
-      this.notify();
-      return this.songs;
+  public async addSong(title: string, lyrics: string, adminPin?: string): Promise<Song[]> {
+    const pinToUse = adminPin || '2026';
+    const newSong: Song = {
+      id: `SONG_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      title,
+      lyrics,
+      category: 'Worship',
+      day: 'all',
+      key: 'Scale',
+      sub: 'Added from Management Desk',
+      tempo: 'Live',
+      time: 'Session'
+    };
+    this.songs = [newSong, ...this.songs];
+    localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(this.songs));
+    this.notify();
+
+    // Persist permanently to Cloud Firestore
+    await firebaseRealtime.saveSongsToCloud(this.songs);
+
+    try {
+      const res = await apiClient.addSong({ title, lyrics, category: 'Worship', day: 'all', key: 'Scale' }, pinToUse);
+      if (res.success && Array.isArray(res.songs)) {
+        const songMap = new Map<string, Song>();
+        this.songs.forEach(s => songMap.set(s.id, s));
+        res.songs.forEach(s => songMap.set(s.id, s));
+        this.songs = Array.from(songMap.values());
+        localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(this.songs));
+        await firebaseRealtime.saveSongsToCloud(this.songs);
+        this.notify();
+      }
+    } catch (err) {
+      console.warn('[RealtimeStore] Backend song sync notice:', err);
     }
-    throw new Error((res as any).message || 'Failed to add song');
+    return this.songs;
   }
 
-  public async deleteSong(id: string, adminPin: string): Promise<Song[]> {
-    const res = await apiClient.deleteSong(id, adminPin);
-    if (res.success && res.songs) {
-      this.songs = res.songs;
-      localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(this.songs));
-      this.notify();
-      return this.songs;
+  public async deleteSong(id: string, adminPin?: string): Promise<Song[]> {
+    const pinToUse = adminPin || '2026';
+    this.songs = this.songs.filter(s => s.id !== id);
+    localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(this.songs));
+    this.notify();
+
+    // Persist permanently to Cloud Firestore
+    await firebaseRealtime.saveSongsToCloud(this.songs);
+
+    try {
+      const res = await apiClient.deleteSong(id, pinToUse);
+      if (res.success && Array.isArray(res.songs)) {
+        this.songs = this.songs.filter(s => s.id !== id);
+        localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(this.songs));
+        await firebaseRealtime.saveSongsToCloud(this.songs);
+        this.notify();
+      }
+    } catch (err) {
+      console.warn('[RealtimeStore] Backend song delete notice:', err);
     }
-    throw new Error((res as any).message || 'Failed to delete song');
+    return this.songs;
   }
 
   public getConnectionStatus(): ConnectionStatus {

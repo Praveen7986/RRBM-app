@@ -36,8 +36,6 @@ export const AlertScreen: React.FC = () => {
 
   // Form & Interaction States
   const [volunteerIdInput, setVolunteerIdInput] = useState<string>('');
-  const [passwordInput, setPasswordInput] = useState<string>('');
-  const [showPassword, setShowPassword] = useState<boolean>(false);
   const [loginError, setLoginError] = useState<string>('');
   const [isSigningIn, setIsSigningIn] = useState<boolean>(false);
   const [isAlertBroadcasting, setIsAlertBroadcasting] = useState<boolean>(false);
@@ -61,13 +59,27 @@ export const AlertScreen: React.FC = () => {
 
   useEffect(() => {
     const unsubscribe = realtimeStore.subscribe(() => {
-      setCurrentVolunteer(realtimeStore.getCurrentVolunteer());
+      const vol = realtimeStore.getCurrentVolunteer();
+      // Guard: Never show coordinator admin as a volunteer account
+      if (vol?.id === 'rrbm-manager-admin' || vol?.role === 'admin' && vol?.name?.toLowerCase().includes('admin')) {
+        realtimeStore.signOutVolunteer();
+        setCurrentVolunteer(null);
+      } else {
+        setCurrentVolunteer(vol);
+      }
       setActiveAlert(realtimeStore.getActiveAlert());
       setConnectionStatus(realtimeStore.getConnectionStatus());
       setChatMessages(realtimeStore.getChatMessages());
     });
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (currentVolunteer?.id === 'rrbm-manager-admin') {
+      realtimeStore.signOutVolunteer();
+      setCurrentVolunteer(null);
+    }
+  }, [currentVolunteer]);
 
   useEffect(() => {
     if (activeAlert && currentVolunteer) {
@@ -94,14 +106,14 @@ export const AlertScreen: React.FC = () => {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     const id = volunteerIdInput.trim();
-    const pwd = passwordInput.trim();
-    if (!id || !pwd || isSigningIn) return;
+    if (!id || isSigningIn) return;
 
     setIsSigningIn(true);
     setLoginError('');
 
     try {
-      const vol = await realtimeStore.signInVolunteer(id, pwd);
+      // For every login, volunteer enters UID and password will be 2026
+      const vol = await realtimeStore.signInVolunteer(id, '2026');
       if (vol) {
         showToast('success', `Welcome back, ${vol.name}!`);
         await requestNotificationPermission();
@@ -221,7 +233,7 @@ export const AlertScreen: React.FC = () => {
           <div>
             <h2 className="text-base font-black text-white tracking-wide">Volunteer Sign-In</h2>
             <p className="text-xs text-slate-400 mt-1 max-w-xs">
-              Enter your assigned Volunteer ID & password to receive alerts and communicate with ministry leads.
+              Enter your assigned Volunteer ID / UID to receive alerts and communicate with ministry leads.
             </p>
           </div>
 
@@ -244,7 +256,7 @@ export const AlertScreen: React.FC = () => {
                 type="text"
                 value={volunteerIdInput}
                 onChange={(e) => setVolunteerIdInput(e.target.value)}
-                placeholder="Volunteer ID (e.g. 001, 002, 261)"
+                placeholder="Enter Volunteer ID / UID (e.g. 001, 261)"
                 className="w-full py-2.5 pl-9 pr-3.5 rounded-xl text-xs text-white placeholder-slate-500 font-mono"
                 style={{ background: '#070D1D', border: '1px solid rgba(56, 189, 248, 0.25)' }}
                 autoCapitalize="none"
@@ -252,27 +264,9 @@ export const AlertScreen: React.FC = () => {
               />
             </div>
 
-            <div className="relative flex items-center">
-              <div className="absolute left-3 text-sky-400 pointer-events-none">
-                <Lock size={15} />
-              </div>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder="Password"
-                className="w-full py-2.5 pl-9 pr-10 rounded-xl text-xs text-white placeholder-slate-500"
-                style={{ background: '#070D1D', border: '1px solid rgba(56, 189, 248, 0.25)' }}
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 text-slate-400 hover:text-white cursor-pointer"
-                tabIndex={-1}
-              >
-                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
+            <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-sky-950/40 border border-sky-500/20 text-[11px] text-slate-400">
+              <span>Festival Login Password:</span>
+              <span className="font-mono font-bold text-amber-400">2026 (Applied)</span>
             </div>
 
             <button
@@ -284,7 +278,7 @@ export const AlertScreen: React.FC = () => {
               {isSigningIn ? (
                 <>
                   <RefreshCw size={13} className="animate-spin" />
-                  <span>Verifying Credentials...</span>
+                  <span>Signing In...</span>
                 </>
               ) : (
                 <span>Sign In as Volunteer</span>

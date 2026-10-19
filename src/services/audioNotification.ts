@@ -4,59 +4,124 @@
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 
-// Channel definitions matching Android MainActivity.java
-export const CHANNEL_ALERTS_ID = 'rrbm_alerts_channel';
-export const CHANNEL_CHAT_ID = 'rrbm_chat_channel';
+// Channel definitions matching Android MainActivity.java (v3 with Heads-Up High Importance)
+export const CHANNEL_ALERTS_ID = 'rrbm_alerts_headsup_v3';
+export const CHANNEL_CHAT_ID = 'rrbm_chat_headsup_v3';
 
 let isChannelsInitialized = false;
 
 /**
- * Initialize Android notification channels with strong vibration patterns
+ * Initialize Android notification channels with strong vibration patterns and Heads-Up pop-up display
  */
 export const initNotificationChannels = async (): Promise<void> => {
   if (!Capacitor.isNativePlatform() || isChannelsInitialized) return;
 
   try {
-    // 1. Alert Channel (High Importance, Strong Vibration)
+    // Delete legacy default-importance channels so Android clears cached low priorities
+    try {
+      await LocalNotifications.deleteChannel({ id: 'rrbm_alerts_channel' });
+      await LocalNotifications.deleteChannel({ id: 'rrbm_chat_channel' });
+    } catch {}
+
+    // 1. Alert Channel (Max Importance, Heads-Up Pop-up Display, Strong Multi-Pulse Vibration)
     await LocalNotifications.createChannel({
       id: CHANNEL_ALERTS_ID,
-      name: 'RRBM ALERTS',
-      description: 'High-priority leader emergency calls and urgent prayer alerts',
-      importance: 5, // High / Max
+      name: '🚨 RRBM URGENT ALERTS',
+      description: 'High-priority leader emergency calls and urgent prayer alerts with pop-up display',
+      importance: 5, // High / Max: Displays Heads-Up banner over any active app
       visibility: 1, // Public on lockscreen
       vibration: true,
       lights: true,
       lightColor: '#F43F5E'
     });
 
-    // 2. Chat Channel (Default Importance)
+    // 2. Chat Channel (High Importance, Heads-Up Banner Display Over Other Apps)
     await LocalNotifications.createChannel({
       id: CHANNEL_CHAT_ID,
-      name: 'RRBM LIVE CHAT',
-      description: 'Real-time volunteer chat messages and coordination replies',
-      importance: 3, // Default
-      visibility: 1,
-      vibration: true
+      name: '💬 RRBM LIVE CHAT',
+      description: 'Real-time volunteer chat messages with pop-up banner over any display',
+      importance: 5, // High / Max: Displays Heads-Up banner over any active app
+      visibility: 1, // Public on lockscreen
+      vibration: true,
+      lights: true,
+      lightColor: '#38BDF8'
     });
 
     isChannelsInitialized = true;
-    console.log('[NotificationService] Android channels initialized successfully');
+    console.log('[NotificationService] Android Heads-Up v3 channels initialized successfully');
   } catch (err) {
     console.warn('[NotificationService] Failed to create notification channels:', err);
   }
 };
 
+export const ACTION_TYPE_ALERT = 'RRBM_ALERT_ACTIONS';
+
+export const registerNotificationActionTypes = async (): Promise<void> => {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    await LocalNotifications.registerActionTypes({
+      types: [
+        {
+          id: ACTION_TYPE_ALERT,
+          actions: [
+            {
+              id: 'send_alert',
+              title: '🚨 Send alert'
+            },
+            {
+              id: 'coming',
+              title: "✓ I'm coming"
+            },
+            {
+              id: 'not_coming',
+              title: "✕ I cant come"
+            }
+          ]
+        }
+      ]
+    });
+  } catch (err) {
+    console.warn('[NotificationService] registerActionTypes error:', err);
+  }
+};
+
 /**
- * Setup listener for notification taps to route to the appropriate screen
+ * Setup listener for notification taps and action buttons (Send alert, I'm coming, I cant come)
  */
-export const setupNotificationTapListener = (onNavigateToAlertTab: () => void) => {
+export const setupNotificationTapListener = (
+  onNavigateToAlertTab: () => void,
+  onQuickResponse?: (responseType: 'coming' | 'not_coming') => void,
+  onOpenSendAlert?: () => void
+) => {
   if (!Capacitor.isNativePlatform()) return;
 
   try {
     LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
-      console.log('[NotificationService] Notification tapped:', action);
-      if (action.notification?.extra?.targetTab === 'alert') {
+      console.log('[NotificationService] Notification action performed:', action);
+      const actionId = action.actionId;
+      if (actionId === 'coming') {
+        if (onQuickResponse) {
+          onQuickResponse('coming');
+        } else {
+          window.dispatchEvent(new CustomEvent('rrbm_notification_action', { detail: { action: 'coming' } }));
+        }
+      } else if (actionId === 'not_coming') {
+        if (onQuickResponse) {
+          onQuickResponse('not_coming');
+        } else {
+          window.dispatchEvent(new CustomEvent('rrbm_notification_action', { detail: { action: 'not_coming' } }));
+        }
+      } else if (actionId === 'send_alert') {
         onNavigateToAlertTab();
+        if (onOpenSendAlert) {
+          onOpenSendAlert();
+        } else {
+          window.dispatchEvent(new CustomEvent('rrbm_notification_action', { detail: { action: 'send_alert' } }));
+        }
+      } else {
+        if (action.notification?.extra?.targetTab === 'alert') {
+          onNavigateToAlertTab();
+        }
       }
     });
   } catch (err) {
@@ -66,15 +131,19 @@ export const setupNotificationTapListener = (onNavigateToAlertTab: () => void) =
 
 /**
  * Trigger Leader Alert Notification:
- * - Native Android system notification with HIGH priority and vibration
+ * - Native Android system notification with HIGH priority, vibration, and 3 quick action buttons:
+ *   1. Send alert
+ *   2. I'm coming
+ *   3. I cant come
  * - Web Audio API emergency harmonic chime
- * - Browser Notification fallback
+ * - Browser Notification with rich actions fallback
  */
 export const triggerAlertSoundAndVibration = async (title: string, body: string) => {
-  // 1. Native Android Local Notification (Vibration + Status Bar + Sound + Heads-Up Banner)
+  // 1. Native Android Local Notification (Vibration + Status Bar + Sound + Heads-Up Banner + 3 Action Buttons)
   if (Capacitor.isNativePlatform()) {
     try {
       await initNotificationChannels();
+      await registerNotificationActionTypes();
       const notifId = Math.floor(Date.now() % 2147483647);
       await LocalNotifications.schedule({
         notifications: [
@@ -83,6 +152,7 @@ export const triggerAlertSoundAndVibration = async (title: string, body: string)
             title: title || '🚨 RRBM VOLUNTEER ALERT',
             body: body || 'Leader is calling — volunteers are requested to gather immediately.',
             channelId: CHANNEL_ALERTS_ID,
+            actionTypeId: ACTION_TYPE_ALERT,
             extra: {
               targetTab: 'alert',
               type: 'ALERT',
@@ -99,7 +169,6 @@ export const triggerAlertSoundAndVibration = async (title: string, body: string)
   // 2. Strong Vibration Pattern via Vibration API (Foreground fallback)
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
     try {
-      // Pattern: VIBRATE (500ms) -> PAUSE (200ms) -> VIBRATE (500ms) -> PAUSE (200ms) -> VIBRATE (800ms)
       navigator.vibrate([500, 200, 500, 200, 800]);
     } catch {
       // Ignore vibration error if not supported
@@ -116,7 +185,6 @@ export const triggerAlertSoundAndVibration = async (title: string, body: string)
       }
 
       const now = ctx.currentTime;
-      // Harmonic chime frequencies: C5 (523.25Hz) -> E5 (659.25Hz) -> G5 (783.99Hz)
       const tones = [
         { freq: 523.25, time: 0.0, dur: 0.2 },
         { freq: 659.25, time: 0.12, dur: 0.25 },
@@ -145,17 +213,46 @@ export const triggerAlertSoundAndVibration = async (title: string, body: string)
     console.warn('Audio alert chime could not be played:', err);
   }
 
-  // 4. Web Desktop Notification fallback if running in browser
-  if (!Capacitor.isNativePlatform() && typeof window !== 'undefined' && 'Notification' in window) {
-    if (Notification.permission === 'granted') {
+  // 4. Web Desktop / Mobile Browser Service Worker Notification fallback with Action Buttons
+  if (!Capacitor.isNativePlatform() && typeof window !== 'undefined') {
+    if ('serviceWorker' in navigator && Notification.permission === 'granted') {
       try {
-        const options: NotificationOptions & { vibrate?: number[]; requireInteraction?: boolean } = {
-          body: body || 'Volunteers are requested to gather. Tap to open live coordination room.',
-          icon: '/rrb_logo.png',
-          badge: '/rrb_logo.png',
+        const reg = await navigator.serviceWorker.ready;
+        if (reg && reg.showNotification) {
+          reg.showNotification(title || '🚨 RRBM VOLUNTEER ALERT', {
+            body: body || 'Leader is calling — volunteers are requested to gather immediately.',
+            icon: '/logo.png',
+            badge: '/logo.png',
+            vibrate: [500, 200, 500, 200, 800],
+            tag: `rrbm-alert-${Date.now()}`,
+            renotify: true,
+            requireInteraction: true,
+            actions: [
+              { action: 'send_alert', title: '🚨 Send alert' },
+              { action: 'coming', title: "✓ I'm coming" },
+              { action: 'not_coming', title: "✕ I cant come" }
+            ],
+            data: { url: '/?tab=alert', targetTab: 'alert' }
+          } as any);
+          return;
+        }
+      } catch {}
+    }
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        const options: NotificationOptions & { vibrate?: number[]; requireInteraction?: boolean; actions?: any[] } = {
+          body: body || 'Leader is calling — volunteers are requested to gather immediately.',
+          icon: '/logo.png',
+          badge: '/logo.png',
           vibrate: [500, 200, 500, 200, 800],
-          tag: 'rrbm-volunteer-alert',
-          requireInteraction: true
+          tag: `rrbm-alert-${Date.now()}`,
+          requireInteraction: true,
+          actions: [
+            { action: 'send_alert', title: '🚨 Send alert' },
+            { action: 'coming', title: "✓ I'm coming" },
+            { action: 'not_coming', title: "✕ I cant come" }
+          ]
         };
         new Notification(title || '🚨 RRBM VOLUNTEER ALERT', options as NotificationOptions);
       } catch {
@@ -177,7 +274,7 @@ export const triggerChatNotification = async (senderName: string, text: string) 
         notifications: [
           {
             id: notifId,
-            title: `💬 RRBM: ${senderName}`,
+            title: `💬 ${senderName}`,
             body: text.length > 70 ? text.substring(0, 67) + '...' : text,
             channelId: CHANNEL_CHAT_ID,
             extra: {
@@ -191,6 +288,20 @@ export const triggerChatNotification = async (senderName: string, text: string) 
     } catch (e) {
       console.warn('[NotificationService] Chat notification failed:', e);
     }
+  } else if (typeof window !== 'undefined' && 'serviceWorker' in navigator && Notification.permission === 'granted') {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      if (reg && reg.showNotification) {
+        reg.showNotification(`💬 ${senderName}`, {
+          body: text,
+          icon: '/logo.png',
+          badge: '/logo.png',
+          vibrate: [250, 150, 250],
+          tag: `rrbm-chat-${Date.now()}`,
+          data: { url: '/?tab=alert', targetTab: 'alert' }
+        } as any);
+      }
+    } catch {}
   }
 };
 

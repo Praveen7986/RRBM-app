@@ -41,7 +41,10 @@ export const SongLyricsModal: React.FC<SongLyricsModalProps> = ({ song, onClose 
               <span className="text-[10px] font-black uppercase text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">
                 {song.category} &bull; {song.time}
               </span>
-              <h3 className="text-base font-black text-white leading-tight mt-1">
+              <h3 
+                className="text-base font-black text-white leading-tight mt-1 font-nats"
+                style={{ fontFamily: "'NATS', 'Nats', 'Noto Sans Telugu', sans-serif" }}
+              >
                 {song.title}
               </h3>
               <p className="text-[11px] text-sky-200/80 font-medium">
@@ -137,8 +140,14 @@ export const SongLyricsModal: React.FC<SongLyricsModalProps> = ({ song, onClose 
 
           {/* Formatted Lyrics Text */}
           <div
-            className="whitespace-pre-wrap leading-relaxed text-slate-100 font-sans font-medium select-text"
-            style={{ fontSize: `${fontSize}px` }}
+            className="whitespace-pre-wrap leading-relaxed text-slate-100 font-nats font-medium select-text"
+            style={{ 
+              fontSize: `${fontSize}px`,
+              fontFamily: "'NATS', 'Nats', 'Noto Sans Telugu', sans-serif",
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              lineHeight: 1.8
+            }}
           >
             {activeLanguage === 'english' ? song.lyrics : (song.teluguLyrics || song.lyrics)}
           </div>
@@ -148,7 +157,7 @@ export const SongLyricsModal: React.FC<SongLyricsModalProps> = ({ song, onClose 
         <div className="p-3 bg-[#101c36] border-t border-sky-500/20 text-center">
           <span className="text-[10px] text-slate-400 font-semibold flex items-center justify-center gap-1">
             <BookOpen size={11} className="text-sky-400" />
-            <span>RRBM Fasting Worship &bull; October 20–22, 2026</span>
+            <span>RRBM Fasting Worship &bull; October 20, 21, 22, 2026</span>
           </span>
         </div>
       </div>

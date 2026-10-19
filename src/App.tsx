@@ -20,6 +20,15 @@ export const App: React.FC = () => {
   const [isManagerOpen, setIsManagerOpen] = useState<boolean>(false);
 
   useEffect(() => {
+    // Check URL parameters (e.g. from notification click: ?tab=alert)
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab') as TabType;
+      if (tabParam && ['home', 'alert', 'songs', 'money'].includes(tabParam)) {
+        setCurrentTab(tabParam);
+      }
+    }
+
     // 1. Listen for Android native notification tap routing (Leader Alert or Live Chat)
     const handleNotificationTap = (event: CustomEvent | Event) => {
       const customEv = event as CustomEvent;
@@ -32,10 +41,42 @@ export const App: React.FC = () => {
       }
     };
 
-    window.addEventListener('rrbm_notification_tap', handleNotificationTap as EventListener);
-    setupNotificationTapListener(() => setCurrentTab('alert'));
+    // 2. Listen for Quick Notification Actions (Send alert, I'm coming, I cant come)
+    const handleNotificationAction = (event: CustomEvent | Event) => {
+      const customEv = event as CustomEvent;
+      const detail = customEv.detail || {};
+      const action = detail.action;
+      if (action === 'coming' || action === 'not_coming') {
+        realtimeStore.sendQuickResponse(action).catch(() => {});
+      } else if (action === 'send_alert') {
+        setCurrentTab('alert');
+      }
+    };
 
-    // 2. Also register device push token if available in Capacitor/Android bridge
+    // 3. Listen for Service Worker messages
+    const handleSwMessage = (event: MessageEvent) => {
+      const data = event.data || {};
+      if (data.type === 'NOTIFICATION_QUICK_RESPONSE') {
+        realtimeStore.sendQuickResponse(data.responseType).catch(() => {});
+      } else if (data.type === 'NAVIGATE_TAB') {
+        setCurrentTab(data.tab || 'alert');
+      }
+    };
+
+    window.addEventListener('rrbm_notification_tap', handleNotificationTap as EventListener);
+    window.addEventListener('rrbm_notification_action', handleNotificationAction as EventListener);
+
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    }
+
+    setupNotificationTapListener(
+      () => setCurrentTab('alert'),
+      (resp) => realtimeStore.sendQuickResponse(resp).catch(() => {}),
+      () => setCurrentTab('alert')
+    );
+
+    // 4. Register device push token if available in Capacitor/Android bridge
     try {
       const volunteer = realtimeStore.getCurrentVolunteer();
       if (volunteer && (window as unknown as { AndroidBridge?: { getPushToken?: () => string } }).AndroidBridge) {
@@ -59,6 +100,10 @@ export const App: React.FC = () => {
 
     return () => {
       window.removeEventListener('rrbm_notification_tap', handleNotificationTap as EventListener);
+      window.removeEventListener('rrbm_notification_action', handleNotificationAction as EventListener);
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      }
     };
   }, []);
 
