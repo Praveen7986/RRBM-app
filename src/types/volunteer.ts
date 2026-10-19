@@ -70,6 +70,8 @@ export interface Song {
   teluguLyrics?: string;
   themeVerse?: string;
   createdAt?: string;
+  isMainSong?: boolean;
+  mainSongDay?: 'day1' | 'day2' | 'day3' | string;
 }
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'offline';

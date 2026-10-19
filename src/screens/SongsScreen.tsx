@@ -16,16 +16,22 @@ import {
   ArrowLeft,
   Music2,
   Sparkles,
-  Bookmark
+  Bookmark,
+  Star
 } from 'lucide-react';
 import { realtimeStore } from '../services/realtimeStore';
 import { Song } from '../types/volunteer';
+
+const DAY_LABELS: Record<'day1' | 'day2' | 'day3', string> = {
+  day1: 'Day 1 (Oct 20)',
+  day2: 'Day 2 (Oct 21)',
+  day3: 'Day 3 (Oct 22)'
+};
 
 export const SongsScreen: React.FC = () => {
   const [songsList, setSongsList] = useState<Song[]>(() => realtimeStore.getSongs());
   const [activeDay, setActiveDay] = useState<'all' | 'day1' | 'day2' | 'day3'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   
   // Lyrics Reader State
@@ -39,24 +45,10 @@ export const SongsScreen: React.FC = () => {
     return unsub;
   }, []);
 
-  // Unique categories
-  const categories = ['All', 'Opening Praise', 'Deep Worship', 'Holy Spirit', 'Worship', 'Consecration', 'Thanksgiving'];
-
-  // Current day filtered songs
-  const daySongs = activeDay === 'all' 
-    ? songsList 
-    : songsList.filter(s => (s.day || 'all') === activeDay || (s.day || 'all') === 'all');
-
-  // Search and category filtered songs
-  const filteredSongs = daySongs.filter((song) => {
-    // Category filter
-    if (selectedCategory !== 'All' && !song.category?.toLowerCase().includes(selectedCategory.toLowerCase())) {
-      return false;
-    }
-
-    // Search query filter
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
+  // Search helper
+  const matchesSearch = (song: Song, query: string) => {
+    if (!query.trim()) return true;
+    const q = query.toLowerCase();
     return (
       song.title.toLowerCase().includes(q) ||
       (song.sub && song.sub.toLowerCase().includes(q)) ||
@@ -64,7 +56,26 @@ export const SongsScreen: React.FC = () => {
       (song.category && song.category.toLowerCase().includes(q)) ||
       (song.lyrics && song.lyrics.toLowerCase().includes(q))
     );
-  });
+  };
+
+  // Current day filtered songs
+  const daySongs = activeDay === 'all' 
+    ? songsList 
+    : songsList.filter(s => (s.day || 'all') === activeDay || (s.day || 'all') === 'all');
+
+  // Search filtered songs
+  const filteredSongs = daySongs.filter(song => matchesSearch(song, searchQuery));
+
+  // Main Highlighted Songs for Day 1, Day 2, Day 3
+  const day1Main = songsList.find(s => s.isMainSong && s.mainSongDay === 'day1') || songsList.find(s => s.id === 's1');
+  const day2Main = songsList.find(s => s.isMainSong && s.mainSongDay === 'day2') || songsList.find(s => s.id === 's7');
+  const day3Main = songsList.find(s => s.isMainSong && s.mainSongDay === 'day3') || songsList.find(s => s.id === 's13');
+
+  // Active day main song (when Day 1, Day 2, or Day 3 is clicked)
+  const currentDayMain = activeDay === 'all' 
+    ? null 
+    : (songsList.find(s => s.isMainSong && (s.mainSongDay === activeDay || s.day === activeDay)) || 
+       (activeDay === 'day1' ? day1Main : activeDay === 'day2' ? day2Main : day3Main));
 
   const handleCopyLyrics = (song: Song) => {
     navigator.clipboard.writeText(`${song.title}\n\n${song.lyrics}`);
@@ -321,26 +332,176 @@ export const SongsScreen: React.FC = () => {
         </button>
       </div>
 
-      {/* 4. Category Filter Pills */}
-      <div className="w-full flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px]">
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            type="button"
-            onClick={() => setSelectedCategory(cat)}
-            className={`px-3 py-1 rounded-lg font-semibold transition-all shrink-0 cursor-pointer ${
-              selectedCategory === cat
-                ? 'bg-slate-700 text-sky-300 border border-sky-400/40 shadow-sm'
-                : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800'
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
+      {/* 4. Highlighted Main Song Hero Card (When Date Filter is Selected: Day 1, Day 2, or Day 3) */}
+      {activeDay !== 'all' && currentDayMain && matchesSearch(currentDayMain, searchQuery) && (
+        <div 
+          onClick={() => setSelectedSong(currentDayMain)}
+          className="w-full p-4 sm:p-5 rounded-3xl border-2 border-amber-400/70 shadow-[0_0_30px_rgba(251,191,36,0.22)] bg-gradient-to-br from-amber-500/20 via-[#131e3b] to-[#0a1224] transition-all hover:scale-[1.008] active:scale-[0.99] cursor-pointer group space-y-3 relative overflow-hidden"
+        >
+          {/* Top Glow & Badge Row */}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-400 text-slate-950 font-black text-[10.5px] uppercase tracking-wider shadow-md">
+              <Star size={13} className="fill-slate-950 text-slate-950" />
+              <span>{DAY_LABELS[activeDay]} • Main Highlighted Song</span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              {currentDayMain.key && (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-400/20 text-amber-200 border border-amber-400/40 shadow-sm">
+                  {currentDayMain.key}
+                </span>
+              )}
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/20 text-sky-200 border border-sky-400/30">
+                {currentDayMain.category || 'Main Hymn'}
+              </span>
+            </div>
+          </div>
+
+          {/* Song Name in Large Telugu NATS Font */}
+          <div>
+            <h2 
+              className="text-2xl sm:text-3xl font-black text-amber-100 group-hover:text-amber-300 transition-colors font-nats tracking-wide leading-tight"
+              style={{ fontFamily: "'NATS', 'Noto Sans Telugu', sans-serif" }}
+            >
+              {currentDayMain.title}
+            </h2>
+            {currentDayMain.sub && (
+              <p className="text-xs text-slate-300 font-medium mt-0.5">
+                {currentDayMain.sub}
+              </p>
+            )}
+          </div>
+
+          {/* Lyrics Snippet Preview */}
+          {currentDayMain.lyrics && (
+            <div 
+              className="p-3 rounded-2xl bg-black/45 border border-amber-400/25 text-xs sm:text-sm text-slate-200 font-nats leading-relaxed max-h-24 overflow-hidden relative"
+              style={{ fontFamily: "'NATS', 'Noto Sans Telugu', sans-serif" }}
+            >
+              <div className="line-clamp-3 whitespace-pre-line">
+                {currentDayMain.lyrics}
+              </div>
+              <div className="absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
+            </div>
+          )}
+
+          {/* Call to action bar */}
+          <div className="flex items-center justify-between pt-1 text-xs">
+            <span className="text-[10.5px] font-mono text-amber-300/90 flex items-center gap-1">
+              <Sparkles size={12} className="text-amber-400" />
+              <span>Full Lyrics in Telugu NATS Font</span>
+            </span>
+
+            <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-md transition-all group-hover:translate-x-0.5">
+              <span>Read Lyrics</span>
+              <ChevronRight size={14} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Highlighted 3-Day Songs (When "All Songs" Filter is Selected) */}
+      {activeDay === 'all' && (
+        <div className="w-full space-y-2.5">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Star size={13} className="text-amber-400 fill-amber-400" />
+              <span>Main Highlighted Songs (Day 1 • Day 2 • Day 3)</span>
+            </span>
+          </div>
+
+          <div className="space-y-2.5">
+            {[
+              {
+                dayKey: 'day1',
+                label: 'Day 1 (Oct 20) • Main Song',
+                song: day1Main,
+                cardTheme: 'border-amber-400/60 shadow-[0_0_20px_rgba(251,191,36,0.18)] bg-gradient-to-r from-amber-500/15 via-[#131d38] to-[#0c152a]',
+                badgeTheme: 'bg-amber-400 text-slate-950 border-amber-300',
+                titleColor: 'text-amber-100 group-hover:text-amber-300'
+              },
+              {
+                dayKey: 'day2',
+                label: 'Day 2 (Oct 21) • Main Song',
+                song: day2Main,
+                cardTheme: 'border-sky-400/60 shadow-[0_0_20px_rgba(56,189,248,0.18)] bg-gradient-to-r from-sky-500/15 via-[#131d38] to-[#0c152a]',
+                badgeTheme: 'bg-sky-400 text-slate-950 border-sky-300',
+                titleColor: 'text-sky-100 group-hover:text-sky-300'
+              },
+              {
+                dayKey: 'day3',
+                label: 'Day 3 (Oct 22) • Main Song',
+                song: day3Main,
+                cardTheme: 'border-emerald-400/60 shadow-[0_0_20px_rgba(52,211,153,0.18)] bg-gradient-to-r from-emerald-500/15 via-[#131d38] to-[#0c152a]',
+                badgeTheme: 'bg-emerald-400 text-slate-950 border-emerald-300',
+                titleColor: 'text-emerald-100 group-hover:text-emerald-300'
+              }
+            ].map(({ dayKey, label, song, cardTheme, badgeTheme, titleColor }) => {
+              if (!song || !matchesSearch(song, searchQuery)) return null;
+              return (
+                <div
+                  key={dayKey}
+                  onClick={() => setSelectedSong(song)}
+                  className={`p-3.5 sm:p-4 rounded-2xl border-2 transition-all cursor-pointer group active:scale-[0.99] shadow-md ${cardTheme}`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider border shadow-sm ${badgeTheme}`}>
+                      ⭐ {label}
+                    </span>
+
+                    {song.key && (
+                      <span className="text-[10px] font-mono font-bold text-amber-200 bg-amber-400/15 px-2 py-0.5 rounded-full border border-amber-400/30">
+                        {song.key}
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 
+                    className={`text-lg sm:text-xl font-black font-nats leading-tight truncate ${titleColor}`}
+                    style={{ fontFamily: "'NATS', 'Noto Sans Telugu', sans-serif" }}
+                  >
+                    {song.title}
+                  </h3>
+
+                  {song.lyrics && (
+                    <p 
+                      className="text-xs text-slate-300/90 line-clamp-2 mt-1 font-nats italic leading-relaxed"
+                      style={{ fontFamily: "'NATS', 'Noto Sans Telugu', sans-serif" }}
+                    >
+                      {song.lyrics.split('\n').filter(l => l.trim() && !l.startsWith('[')).slice(0, 2).join(' • ')}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between pt-1.5 mt-1 border-t border-white/5 text-[10.5px]">
+                    <span className="text-slate-400 font-mono">
+                      {song.sub || song.category || 'Festival Hymn'}
+                    </span>
+                    <span className="text-sky-400 font-bold flex items-center gap-1 group-hover:underline">
+                      <span>Read Full Lyrics</span>
+                      <ChevronRight size={13} />
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 6. Other Hymnal Songs Section Header */}
+      <div className="w-full flex items-center justify-between pt-2 pb-0.5 px-1">
+        <span className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+          <BookOpen size={13} className="text-sky-400" />
+          <span>
+            {activeDay === 'all' 
+              ? `All Hymnal Songs (${filteredSongs.length})`
+              : `Other Songs for ${DAY_LABELS[activeDay]} (${filteredSongs.filter(s => s.id !== currentDayMain?.id).length})`}
+          </span>
+        </span>
       </div>
 
-      {/* 5. Songs List */}
-      <div className="w-full space-y-2.5 pt-1">
+      {/* 7. Songs List */}
+      <div className="w-full space-y-2.5">
         {filteredSongs.length === 0 ? (
           <div 
             className="p-8 rounded-2xl text-center space-y-2"
@@ -353,67 +514,74 @@ export const SongsScreen: React.FC = () => {
             </p>
           </div>
         ) : (
-          filteredSongs.map((song, index) => (
-            <div
-              key={song.id}
-              onClick={() => setSelectedSong(song)}
-              className="p-4 rounded-2xl flex items-center justify-between cursor-pointer transition-all hover:scale-[1.006] active:scale-[0.99] group shadow-md"
-              style={{
-                background: '#101726',
-                border: '1px solid rgba(255, 255, 255, 0.08)'
-              }}
-            >
-              <div className="flex items-center gap-3.5 overflow-hidden">
-                {/* Song Index Badge */}
-                <div 
-                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-mono font-black text-xs"
-                  style={{
-                    background: 'rgba(56, 189, 248, 0.12)',
-                    border: '1px solid rgba(56, 189, 248, 0.28)',
-                    color: '#38BDF8'
-                  }}
-                >
-                  {String(index + 1).padStart(2, '0')}
-                </div>
-
-                <div className="flex flex-col overflow-hidden">
-                  <div className="flex items-center gap-2">
-                    <span 
-                      className="text-base font-bold text-white group-hover:text-sky-400 transition-colors truncate font-nats"
-                      style={{ fontFamily: "'NATS', 'Noto Sans Telugu', sans-serif" }}
-                    >
-                      {song.title}
-                    </span>
+          filteredSongs
+            .filter(song => activeDay === 'all' || song.id !== currentDayMain?.id)
+            .map((song, index) => (
+              <div
+                key={song.id}
+                onClick={() => setSelectedSong(song)}
+                className="p-4 rounded-2xl flex items-center justify-between cursor-pointer transition-all hover:scale-[1.006] active:scale-[0.99] group shadow-md"
+                style={{
+                  background: '#101726',
+                  border: '1px solid rgba(255, 255, 255, 0.08)'
+                }}
+              >
+                <div className="flex items-center gap-3.5 overflow-hidden">
+                  {/* Song Index Badge */}
+                  <div 
+                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-mono font-black text-xs"
+                    style={{
+                      background: 'rgba(56, 189, 248, 0.12)',
+                      border: '1px solid rgba(56, 189, 248, 0.28)',
+                      color: '#38BDF8'
+                    }}
+                  >
+                    {String(index + 1).padStart(2, '0')}
                   </div>
 
-                  {song.sub && (
-                    <span className="text-xs text-slate-400 truncate mt-0.5">
-                      {song.sub}
-                    </span>
-                  )}
+                  <div className="flex flex-col overflow-hidden">
+                    <div className="flex items-center gap-2">
+                      <span 
+                        className="text-base font-bold text-white group-hover:text-sky-400 transition-colors truncate font-nats"
+                        style={{ fontFamily: "'NATS', 'Noto Sans Telugu', sans-serif" }}
+                      >
+                        {song.title}
+                      </span>
+                      {song.isMainSong && song.mainSongDay && (
+                        <span className="px-1.5 py-0.5 rounded-md bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[9px] font-black uppercase shrink-0">
+                          ⭐ {song.mainSongDay}
+                        </span>
+                      )}
+                    </div>
 
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    {song.key && (
-                      <span className="px-2 py-0.5 rounded-full text-[9.5px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25">
-                        {song.key}
+                    {song.sub && (
+                      <span className="text-xs text-slate-400 truncate mt-0.5">
+                        {song.sub}
                       </span>
                     )}
-                    <span className="px-2 py-0.5 rounded-full text-[9.5px] font-semibold bg-slate-800 text-slate-300 border border-slate-700/60">
-                      {song.category || 'Worship'}
-                    </span>
+
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {song.key && (
+                        <span className="px-2 py-0.5 rounded-full text-[9.5px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                          {song.key}
+                        </span>
+                      )}
+                      <span className="px-2 py-0.5 rounded-full text-[9.5px] font-semibold bg-slate-800 text-slate-300 border border-slate-700/60">
+                        {song.category || 'Worship'}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Read Lyrics Action Pill */}
-              <div className="flex items-center gap-2 shrink-0 ml-3">
-                <span className="text-xs font-bold text-sky-400 group-hover:underline hidden sm:inline">
-                  Lyrics
-                </span>
-                <ChevronRight size={16} className="text-slate-400 group-hover:text-sky-400 transition-colors" />
+                {/* Read Lyrics Action Pill */}
+                <div className="flex items-center gap-2 shrink-0 ml-3">
+                  <span className="text-xs font-bold text-sky-400 group-hover:underline hidden sm:inline">
+                    Lyrics
+                  </span>
+                  <ChevronRight size={16} className="text-slate-400 group-hover:text-sky-400 transition-colors" />
+                </div>
               </div>
-            </div>
-          ))
+            ))
         )}
       </div>
     </div>

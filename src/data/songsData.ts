@@ -15,6 +15,8 @@ export interface SongItem {
   lyrics: string;
   teluguLyrics?: string;
   themeVerse?: string;
+  isMainSong?: boolean;
+  mainSongDay?: 'day1' | 'day2' | 'day3' | string;
 }
 
 export const SONGS_DATA: Record<'day1' | 'day2' | 'day3', SongItem[]> = {
@@ -22,6 +24,8 @@ export const SONGS_DATA: Record<'day1' | 'day2' | 'day3', SongItem[]> = {
     {
       id: 's1',
       day: 'day1',
+      isMainSong: true,
+      mainSongDay: 'day1',
       title: 'Amazing Grace (My Chains Are Gone)',
       sub: 'Opening Praise & Thanksgiving Session',
       category: 'Opening Praise',
@@ -256,6 +260,8 @@ You're never gonna let, never gonna let me down`,
     {
       id: 's7',
       day: 'day2',
+      isMainSong: true,
+      mainSongDay: 'day2',
       title: 'Nee Mahima',
       sub: 'RRBM Worship Team',
       category: 'Opening',
@@ -441,6 +447,8 @@ Let us experience the glory of Your goodness!`,
     {
       id: 's13',
       day: 'day3',
+      isMainSong: true,
+      mainSongDay: 'day3',
       title: 'Great Are You Lord',
       sub: 'All Creation Worship & Fast Conclusion',
       category: 'Fasting Altar',

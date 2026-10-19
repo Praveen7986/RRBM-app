@@ -377,7 +377,15 @@ export const apiClient = {
   },
 
   async addSong(
-    song: { title: string; lyrics: string; category?: string; day?: string; key?: string },
+    song: { 
+      title: string; 
+      lyrics: string; 
+      category?: string; 
+      day?: string; 
+      key?: string;
+      isMainSong?: boolean;
+      mainSongDay?: string | null;
+    },
     authTokenOrPin?: string
   ): Promise<{ success: boolean; song: Song; songs: Song[] }> {
     const pin = authTokenOrPin || '2026';
@@ -406,6 +414,24 @@ export const apiClient = {
     return fetchJson<{ success: boolean; songs: Song[] }>(`/api/songs/${encodeURIComponent(songId)}`, {
       method: 'DELETE',
       headers
+    });
+  },
+
+  async setMainSong(
+    songId: string,
+    mainSongDay: 'day1' | 'day2' | 'day3' | null,
+    authTokenOrPin?: string
+  ): Promise<{ success: boolean; songs: Song[] }> {
+    const pin = authTokenOrPin || '2026';
+    const headers: Record<string, string> = {
+      'x-admin-pin': pin,
+      'Authorization': `Bearer ${pin}`
+    };
+
+    return fetchJson<{ success: boolean; songs: Song[] }>(`/api/songs/${encodeURIComponent(songId)}/main`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ mainSongDay })
     });
   }
 };

@@ -267,7 +267,17 @@ class RealtimeStoreService {
       try {
         const parsed = JSON.parse(savedSongs);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          this.songs = parsed;
+          const hasAnyMain = parsed.some(s => s.isMainSong);
+          if (!hasAnyMain) {
+            this.songs = parsed.map(s => {
+              if (s.id === 's1') return { ...s, isMainSong: true, mainSongDay: 'day1' };
+              if (s.id === 's7') return { ...s, isMainSong: true, mainSongDay: 'day2' };
+              if (s.id === 's13') return { ...s, isMainSong: true, mainSongDay: 'day3' };
+              return s;
+            });
+          } else {
+            this.songs = parsed;
+          }
         } else {
           this.songs = DEFAULT_SONGS_SEEDS;
         }
@@ -1018,18 +1028,40 @@ class RealtimeStoreService {
     return [...this.songs];
   }
 
-  public async addSong(title: string, lyrics: string, adminPin?: string): Promise<Song[]> {
+  public async addSong(
+    title: string, 
+    lyrics: string, 
+    adminPin?: string,
+    options?: { isMainSong?: boolean; mainSongDay?: 'day1' | 'day2' | 'day3' | null; day?: string; key?: string; category?: string }
+  ): Promise<Song[]> {
     const pinToUse = adminPin || '2026';
+    const isMain = Boolean(options?.isMainSong);
+    const mainDay = isMain && options?.mainSongDay ? options.mainSongDay : null;
+    const songDay = mainDay || options?.day || 'all';
+
+    // If new song is marked as main song for a day, clear previous main song of that day
+    if (isMain && mainDay) {
+      this.songs = this.songs.map(s => {
+        if (s.mainSongDay === mainDay) {
+          return { ...s, isMainSong: false, mainSongDay: undefined };
+        }
+        return s;
+      });
+    }
+
     const newSong: Song = {
       id: `SONG_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       title,
       lyrics,
-      category: 'Worship',
-      day: 'all',
-      key: 'Scale',
-      sub: 'Added from Management Desk',
+      category: options?.category || 'Worship',
+      day: songDay,
+      key: options?.key || 'Scale',
+      sub: isMain && mainDay ? `Main Highlighted Song (${mainDay.toUpperCase()})` : 'Added from Management Desk',
       tempo: 'Live',
-      time: 'Session'
+      time: 'Session',
+      isMainSong: isMain,
+      mainSongDay: isMain ? mainDay : undefined,
+      createdAt: new Date().toISOString()
     };
     this.songs = [newSong, ...this.songs];
     localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(this.songs));
@@ -1039,7 +1071,15 @@ class RealtimeStoreService {
     await firebaseRealtime.saveSongsToCloud(this.songs);
 
     try {
-      const res = await apiClient.addSong({ title, lyrics, category: 'Worship', day: 'all', key: 'Scale' }, pinToUse);
+      const res = await apiClient.addSong({ 
+        title, 
+        lyrics, 
+        category: newSong.category, 
+        day: newSong.day, 
+        key: newSong.key,
+        isMainSong: isMain,
+        mainSongDay: mainDay
+      }, pinToUse);
       if (res.success && Array.isArray(res.songs)) {
         const songMap = new Map<string, Song>();
         this.songs.forEach(s => songMap.set(s.id, s));
@@ -1051,6 +1091,51 @@ class RealtimeStoreService {
       }
     } catch (err) {
       console.warn('[RealtimeStore] Backend song sync notice:', err);
+    }
+    return this.songs;
+  }
+
+  public async setMainSong(
+    songId: string, 
+    mainSongDay: 'day1' | 'day2' | 'day3' | null, 
+    adminPin?: string
+  ): Promise<Song[]> {
+    const pinToUse = adminPin || '2026';
+    const isMain = Boolean(mainSongDay);
+
+    this.songs = this.songs.map(s => {
+      // Clear previous main song of this day
+      if (mainSongDay && s.mainSongDay === mainSongDay && s.id !== songId) {
+        return { ...s, isMainSong: false, mainSongDay: undefined };
+      }
+      if (s.id === songId) {
+        return {
+          ...s,
+          isMainSong: isMain,
+          mainSongDay: isMain ? mainSongDay : undefined,
+          day: isMain ? mainSongDay : (s.day || 'all'),
+          sub: isMain ? `Main Highlighted Song (${mainSongDay!.toUpperCase()})` : 'Added from Management Desk'
+        };
+      }
+      return s;
+    });
+
+    localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(this.songs));
+    this.notify();
+
+    // Persist permanently to Cloud Firestore
+    await firebaseRealtime.saveSongsToCloud(this.songs);
+
+    try {
+      const res = await apiClient.setMainSong(songId, mainSongDay, pinToUse);
+      if (res.success && Array.isArray(res.songs)) {
+        this.songs = res.songs;
+        localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(this.songs));
+        await firebaseRealtime.saveSongsToCloud(this.songs);
+        this.notify();
+      }
+    } catch (err) {
+      console.warn('[RealtimeStore] Backend song setMain notice:', err);
     }
     return this.songs;
   }

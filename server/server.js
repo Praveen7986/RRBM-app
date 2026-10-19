@@ -1112,13 +1112,25 @@ const server = http.createServer((req, res) => {
           const title = String(body.title || body.name || '').trim();
           const lyrics = String(body.lyrics || '').trim();
           const category = String(body.category || 'Worship').trim();
-          const day = String(body.day || 'all').trim();
+          const isMainSong = Boolean(body.isMainSong);
+          const mainSongDay = body.mainSongDay ? String(body.mainSongDay).trim() : null;
+          const day = (isMainSong && mainSongDay) ? mainSongDay : String(body.day || 'all').trim();
           const key = String(body.key || 'Scale').trim();
 
           if (!title) return sendError(400, 'Song title/name is required');
           if (!lyrics) return sendError(400, 'Song lyrics content is required');
 
           if (!Array.isArray(db.songs)) db.songs = [];
+
+          // If this song is set as the main song of a day, clear previous main song for that day
+          if (isMainSong && mainSongDay) {
+            db.songs = db.songs.map(s => {
+              if (s.mainSongDay === mainSongDay) {
+                return { ...s, isMainSong: false, mainSongDay: null };
+              }
+              return s;
+            });
+          }
 
           const newSong = {
             id: `SONG_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -1127,9 +1139,11 @@ const server = http.createServer((req, res) => {
             category,
             day,
             key,
-            sub: 'Added from Management Desk',
+            sub: isMainSong && mainSongDay ? `Main Highlighted Song (${mainSongDay.toUpperCase()})` : 'Added from Management Desk',
             tempo: 'Live',
             time: 'Session',
+            isMainSong,
+            mainSongDay: isMainSong ? mainSongDay : null,
             createdAt: new Date().toISOString()
           };
 
@@ -1158,7 +1172,7 @@ const server = http.createServer((req, res) => {
     }
 
     // 14g. Delete Song (DELETE)
-    if (pathname.startsWith('/api/songs/') && req.method === 'DELETE') {
+    if (pathname.startsWith('/api/songs/') && !pathname.endsWith('/main') && req.method === 'DELETE') {
       (async () => {
         try {
           await verifyAdminToken(req);
@@ -1179,6 +1193,58 @@ const server = http.createServer((req, res) => {
           }
 
           broadcast('SONGS_UPDATED', db.songs);
+          sendJson(200, { success: true, songs: db.songs });
+        } catch (err) {
+          sendError(err.status || 401, err.message || 'Unauthorized');
+        }
+      })();
+      return;
+    }
+
+    // 14h. Set/Unset Main Highlighted Song of the Day (POST /api/songs/:id/main)
+    if (pathname.startsWith('/api/songs/') && pathname.endsWith('/main') && req.method === 'POST') {
+      (async () => {
+        try {
+          await verifyAdminToken(req);
+          const songId = pathname.replace('/api/songs/', '').replace('/main', '').trim();
+          const body = await parseJsonBody();
+          const mainSongDay = body.mainSongDay ? String(body.mainSongDay).trim() : null;
+
+          if (!Array.isArray(db.songs)) db.songs = [];
+
+          db.songs = db.songs.map(s => {
+            // Unset previous song for this day
+            if (mainSongDay && s.mainSongDay === mainSongDay && s.id !== songId) {
+              return { ...s, isMainSong: false, mainSongDay: null };
+            }
+            if (s.id === songId) {
+              const isMain = Boolean(mainSongDay);
+              return {
+                ...s,
+                isMainSong: isMain,
+                mainSongDay: isMain ? mainSongDay : null,
+                day: isMain ? mainSongDay : (s.day || 'all'),
+                sub: isMain ? `Main Highlighted Song (${mainSongDay.toUpperCase()})` : 'Added from Management Desk'
+              };
+            }
+            return s;
+          });
+
+          saveDb(db);
+
+          if (adminDb) {
+            try {
+              await adminDb.collection('system').doc('songs').set({
+                items: db.songs,
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+            } catch (err) {
+              console.warn('[SongMainUpdate] Cloud firestore sync error:', err.message);
+            }
+          }
+
+          broadcast('SONGS_UPDATED', db.songs);
+          console.log(`[SongMainUpdated] Song ${songId} main status set to ${mainSongDay}`);
           sendJson(200, { success: true, songs: db.songs });
         } catch (err) {
           sendError(err.status || 401, err.message || 'Unauthorized');

@@ -23,7 +23,8 @@ import {
   Trash2,
   Check,
   Music2,
-  MessageSquare
+  MessageSquare,
+  Star
 } from 'lucide-react';
 import { apiClient } from '../services/api';
 import { realtimeStore } from '../services/realtimeStore';
@@ -62,6 +63,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
   // Songs Hymnal State
   const [songName, setSongName] = useState('');
   const [songLyrics, setSongLyrics] = useState('');
+  const [mainSongDay, setMainSongDay] = useState<'none' | 'day1' | 'day2' | 'day3'>('none');
   const [isSavingSong, setIsSavingSong] = useState(false);
   const [songSuccess, setSongSuccess] = useState<string | null>(null);
   const [songError, setSongError] = useState<string | null>(null);
@@ -261,16 +263,36 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
 
     try {
       const token = getEffectiveToken();
-      const updated = await realtimeStore.addSong(name, lyrics, token);
+      const isMain = mainSongDay !== 'none';
+      const updated = await realtimeStore.addSong(name, lyrics, token, {
+        isMainSong: isMain,
+        mainSongDay: isMain ? mainSongDay : null,
+        day: isMain ? mainSongDay : 'all'
+      });
       setSongsList(updated);
       setSongName('');
       setSongLyrics('');
-      setSongSuccess(`Song "${name}" added to Songs tab successfully!`);
+      setMainSongDay('none');
+      setSongSuccess(
+        isMain 
+          ? `Song "${name}" added as ${mainSongDay.toUpperCase()} Main Highlighted Song!` 
+          : `Song "${name}" added to Songs tab successfully!`
+      );
       setTimeout(() => setSongSuccess(null), 4000);
     } catch (err: any) {
       setSongError(err.message || 'Failed to add song');
     } finally {
       setIsSavingSong(false);
+    }
+  };
+
+  const handleToggleMainSong = async (songId: string, targetDay: 'day1' | 'day2' | 'day3' | null) => {
+    try {
+      const token = getEffectiveToken();
+      const updated = await realtimeStore.setMainSong(songId, targetDay, token);
+      setSongsList(updated);
+    } catch (err: any) {
+      alert(err.message || 'Failed to update song highlight status');
     }
   };
 
@@ -799,6 +821,41 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                           </div>
                         </div>
                       )}
+
+                      {/* Main / Highlighted Song of the Day Selector */}
+                      <div className="p-3 rounded-xl bg-[#09101f] border border-amber-500/30 space-y-2">
+                        <label className="text-[10.5px] font-bold text-amber-300 flex items-center gap-1.5">
+                          <Star size={13} className="text-amber-400 fill-amber-400" />
+                          <span>Main / Highlighted Song of the Day (Optional):</span>
+                        </label>
+                        <div className="grid grid-cols-4 gap-1.5 text-[10px]">
+                          {[
+                            { id: 'none', label: 'Standard' },
+                            { id: 'day1', label: '⭐ Day 1' },
+                            { id: 'day2', label: '⭐ Day 2' },
+                            { id: 'day3', label: '⭐ Day 3' }
+                          ].map(tab => (
+                            <button
+                              key={tab.id}
+                              type="button"
+                              onClick={() => setMainSongDay(tab.id as any)}
+                              className={`py-1.5 px-1 rounded-xl font-bold transition-all border text-center cursor-pointer ${
+                                mainSongDay === tab.id
+                                  ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.4)]'
+                                  : 'bg-[#0c152a] text-slate-300 border-white/10 hover:text-white'
+                              }`}
+                            >
+                              {tab.label}
+                            </button>
+                          ))}
+                        </div>
+                        {mainSongDay !== 'none' && (
+                          <div className="p-2 rounded-lg bg-amber-500/15 border border-amber-400/30 text-[10px] text-amber-200 flex items-center gap-1.5">
+                            <Star size={12} className="text-amber-400 shrink-0 fill-amber-400" />
+                            <span>This song will be prominently displayed larger &amp; highlighted at the top of <strong>{mainSongDay.toUpperCase()}</strong> and in the <strong>All Songs</strong> filter!</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <button
@@ -814,7 +871,7 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                       ) : (
                         <>
                           <Music2 size={13} />
-                          <span>Submit to Songs Tab</span>
+                          <span>{mainSongDay !== 'none' ? `Add as ${mainSongDay.toUpperCase()} Main Song` : 'Submit to Songs Tab'}</span>
                         </>
                       )}
                     </button>
@@ -826,6 +883,9 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                       <span className="text-xs font-black text-white uppercase">
                         Songs in Hymnal ({songsList.length})
                       </span>
+                      <span className="text-[10px] text-amber-300/80 font-mono">
+                        ⭐ = Highlighted Main Song
+                      </span>
                     </div>
 
                     <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
@@ -835,23 +895,49 @@ export const ManagerModal: React.FC<ManagerModalProps> = ({ isOpen, onClose }) =
                         songsList.map((item) => (
                           <div 
                             key={item.id} 
-                            className="p-2.5 rounded-xl bg-[#101c36] border border-sky-500/20 flex items-center justify-between text-xs"
+                            className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${
+                              item.isMainSong && item.mainSongDay
+                                ? 'bg-[#18233e] border-amber-400/50 shadow-sm'
+                                : 'bg-[#101c36] border-sky-500/20'
+                            }`}
                           >
                             <div className="flex flex-col text-left min-w-0 pr-2">
-                              <span className="font-bold text-white text-xs truncate font-nats">{item.title}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-white text-xs truncate font-nats">{item.title}</span>
+                                {item.isMainSong && item.mainSongDay && (
+                                  <span className="px-1.5 py-0.5 rounded-md bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[9px] font-black uppercase shrink-0">
+                                    ⭐ {item.mainSongDay} Main
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-[9.5px] text-sky-300/80 font-mono">
-                                {item.category || 'Worship'}
+                                {item.day ? item.day.toUpperCase() : 'ALL'} • {item.category || 'Worship'}
                               </span>
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteSong(item.id, item.title)}
-                              className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 cursor-pointer transition-colors shrink-0"
-                              title="Delete this song"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {/* Quick Main Song Assigner */}
+                              <select
+                                value={item.isMainSong && item.mainSongDay ? item.mainSongDay : 'none'}
+                                onChange={(e) => handleToggleMainSong(item.id, e.target.value === 'none' ? null : e.target.value as any)}
+                                className="py-1 px-1.5 rounded-lg bg-[#09101f] border border-sky-500/30 text-[10px] text-amber-300 font-semibold focus:outline-none focus:border-amber-400 cursor-pointer"
+                                title="Set as Main / Highlighted Song of the Day"
+                              >
+                                <option value="none">Standard</option>
+                                <option value="day1">⭐ Day 1</option>
+                                <option value="day2">⭐ Day 2</option>
+                                <option value="day3">⭐ Day 3</option>
+                              </select>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSong(item.id, item.title)}
+                                className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 cursor-pointer transition-colors"
+                                title="Delete this song"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
                           </div>
                         ))
                       )}
